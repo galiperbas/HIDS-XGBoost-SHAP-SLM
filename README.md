@@ -5,6 +5,12 @@ Bu proje, uç (edge) veya sis (fog) bilişim ağlarındaki (Örn: IoT ortamları
 
 Sistem temel mimarisi: Siber saldırı sınıflandırmada yüksek başarıya sahip **XGBoost** algoritmasından, kararların şeffaf izlenebilirliği için oyun teorisine dayanan **SHAP (SHapley Additive exPlanations)** mimarisinden ve analiste teknik verileri doğal dilde açıklayabilen Küçük Dil Modeli (**SLM**, Phi-3-mini) entegrasyonundan oluşmaktadır.
 
+## 🏗️ Proje Mimarisi (Project Architecture)
+
+Önerilen projenin yöntem mimarisi; “Veri Ön İşleme”, “XGBoost Model Eğitimi”, “SHAP Entegrasyonu ve Testleri”, “Yerel SLM Entegrasyonu” ve “Canlı Sistem Testleri ve Final Sürecine Hazırlık” olmak üzere beş iş paketinden oluşmaktadır. İlk 4 iş paketi, Şekil 1’de diyagrama karşılık gelmektedir. 5. iş paketi ise, bu mimarinin gerçek donanım kaynaklarına taşınması ve ürünleşmesi sürecini kapsamaktadır.
+
+![Şekil 1: Proje Mimarisi Diyagramı](2242.jpg)
+
 ## 🌟 Temel Özellikler (Features)
 
 * **Edge Cihaz Optimizasyonu:** Kurulan ML iterasyonu <5 MB seviyesinde sıkıştırılmıştır ve gelen sistem/ağ telemetrilerini cihaz üzerinde cihaz başı 10 ms (milisaniye) hızlarda derecelendirir.
