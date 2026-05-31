@@ -1,0 +1,187 @@
+{
+  "project_meta": {
+    "name": "Sanal Laboratuvar Ortamında ve Fiziksel Raspberry Pi Entegreli IDS/Anomali Tespit Sistemi",
+    "version": "1.0.0",
+    "environment": {
+      "host_machine": "Monster abra A5 Laptop (Windows 11)",
+      "simulation_env": "Virtual Machine (VM) - VMware Workstation Pro",
+      "target_hardware": "Raspberry Pi 4 (8GB RAM, ARM Architecture)",
+      "connection_type": "Physical Ethernet (RJ45)"
+    },
+    "frameworks": [
+      "MITRE ATT&CK"
+    ]
+  },
+  "functional_requirements": [
+    {
+      "id": "FR-01.1",
+      "module": "Sanal Ortam ve Atak Simülasyon Modülü",
+      "title": "Normal Arka Plan Trafik Simülasyonu",
+      "actor": "Sanal Makine (VM)",
+      "input": [
+        "HTTP",
+        "HTTPS",
+        "DNS",
+        "MQTT"
+      ],
+      "action": "Akıllı ev ve iç ağ ortamına ait tipik, normal arka plan trafiğini simüle etmek.",
+      "output": "Normal ağ paketi akışı (PCAP/Live Traffic)",
+      "constraints": [
+        "Trafik paternleri gerçekçi ve sürekli olmalıdır."
+      ],
+        "status": "Not Completed"
+    },
+    {
+      "id": "FR-01.2",
+      "module": "Sanal Ortam ve Atak Simülasyon Modülü",
+      "title": "Siber Atak Simülasyonu",
+      "actor": "Sanal Makine (VM)",
+      "input": [
+        "MITRE ATT&CK Framework Taktik ve Teknikleri"
+      ],
+      "action": "Discovery, Lateral Movement ve Exfiltration tabanlı siber saldırı senaryolarını tetiklemek.",
+      "output": "Ofansif/Saldırı ağ paketi akışı",
+      "dependencies": [
+        "FR-01.1"
+      ],
+      "status": "Not Completed"
+    },
+    {
+      "id": "FR-01.3",
+      "module": "Sanal Ortam ve Atak Simülasyon Modülü",
+      "title": "Trafik İletimi",
+      "actor": "Sanal Makine vNIC",
+      "input": "Simüle edilen normal ve ofansif ağ trafiği",
+      "action": "Üretilen tüm ağ trafiğini host bilgisayarın arayüzüne yönlendirmek.",
+      "output": "Kayıpsız vNIC trafik akışı",
+      "constraints": [
+        "Paket kaybı %0 (kayıpsız) olmalıdır."
+      ],
+      "status": "Not Completed"
+    },
+    {
+      "id": "FR-02.1",
+      "module": "Ağ Köprüleme ve Trafik Yönlendirme Modülü",
+      "title": "Fiziksel Trafik Aynalama",
+      "actor": "Host Bilgisayar (Monster)",
+      "input": "vNIC üzerindeki ağ trafiği",
+      "action": "Trafiği köprüleme (Bridging) veya port aynalama (SPAN/Mirroring) yöntemleriyle fiziksel Ethernet portuna aktarmak.",
+      "output": "RJ45 portundan çıkan fiziksel ağ trafiği",
+      "constraints": [
+        "Yönlendirme işlemi donanımsal gecikmeyi minimize edecek şekilde yapılandırılmalıdır."
+      ],
+      "status": "Not Completed"
+    },
+    {
+      "id": "FR-02.2",
+      "module": "Ağ Köprüleme ve Trafik Yönlendirme Modülü",
+      "title": "Canlı Paket Yakalama (Sniffing)",
+      "actor": "Raspberry Pi 4 (Ethernet Arayüzü)",
+      "input": "Fiziksel Ethernet portuna gelen paketler",
+      "action": "Promiscuous Mode (Karışık Mod) kullanarak gelen tüm paketleri canlı olarak dinlemek ve yakalamak.",
+      "output": "Ham paket akışı (Raw Network Packets)",
+      "dependencies": [
+        "FR-02.1"
+      ],
+      "status": "Not Completed"
+    },
+    {
+      "id": "FR-03.1",
+      "module": "Raspberry Pi Veri İşleme ve Öznitelik Çıkarım Modülü",
+      "title": "Ağ Akış (Flow) Oluşturma",
+      "actor": "Raspberry Pi Üzerindeki Ön İşleme Servisi",
+      "input": "Canlı veya PCAP biçimindeki ham ağ paketleri",
+      "action": "Paketleri gerçek zamanlı işleyerek ağ akış özniteliklerine dönüştürmek.",
+      "output_features": [
+        "packet_duration",
+        "tcp_flags",
+        "byte_count",
+        "packet_count"
+      ],
+      "constraints": [
+        "Düşük gecikmeli (low-latency) çalışmalıdır.",
+        "Raspberry Pi 4 (8GB RAM, CPU) kaynakları için optimize/hafif (lightweight) olmalıdır."
+      ],
+      "dependencies": [
+        "FR-02.2"
+      ],
+      "status": "Not Completed"
+    },
+    {
+      "id": "FR-04.1",
+      "module": "Saldırı ve Anomali Tespit Modülü",
+      "title": "Kural Tabanlı Saldırı Tespiti",
+      "actor": "Raspberry Pi IDS Servisi (Kural Motoru)",
+      "input": "Çıkarılan ağ akış öznitelikleri (Network Flow Features)",
+      "action": "Bilinen imza veya kural tabanlı (signature-based) siber saldırı örüntülerini yakalamak.",
+      "output": "Kural tabanlı saldırı alarmı veri nesnesi",
+      "dependencies": [
+        "FR-03.1"
+      ],
+      "status": "Not Completed"
+    },
+    {
+      "id": "FR-04.2",
+      "module": "Saldırı ve Anomali Tespit Modülü",
+      "title": "Makine Öğrenmesi Tabanlı Anomali Tespiti",
+      "actor": "Raspberry Pi ML/AI Modeli",
+      "input": "Çıkarılan ağ akış öznitelikleri (Network Flow Features)",
+      "action": "Eğitilen normal ev trafiği şablonunun dışına çıkan sıra dışı (zero-day anomalies) hareketleri tespit etmek.",
+      "output": "Anomali skoru ve anomali alarmı veri nesnesi",
+      "constraints": [
+        "Kullanılacak ML modelleri ARM mimarisiyle uyumlu olmalıdır.",
+        "Gerçek zamanlı çıkarım (inference) için optimize edilmelidir."
+      ],
+      "dependencies": [
+        "FR-03.1"
+      ],
+      "status": "Not Completed"
+    },
+    {
+      "id": "FR-05.1",
+      "module": "Loglama, Eşleştirme ve Alarm Modülü",
+      "title": "MITRE ATT&CK Eşleştirmesi",
+      "actor": "Loglama Servisi",
+      "input": "Tespit edilen şüpheli aktiviteler ve anomaliler",
+      "action": "Alarmları otomatik olarak ilgili MITRE ATT&CK Teknik ID'leri ile eşleştirmek.",
+      "output": "MITRE ID ile zenginleştirilmiş alarm verisi",
+      "dependencies": [
+        "FR-04.1",
+        "FR-04.2"
+      ],
+      "status": "Not Completed"
+    },
+    {
+      "id": "FR-05.2",
+      "module": "Loglama, Eşleştirme ve Alarm Modülü",
+      "title": "JSON Formatında Loglama",
+      "actor": "Log Kayıt Sistemi",
+      "input": "Zenginleştirilmiş alarm verisi",
+      "action": "Alarmları belirlenen standart şemaya göre JSON formatında diske/veritabanına yazmak.",
+      "output_schema": {
+        "timestamp": "ISO 8601",
+        "source_ip": "String",
+        "source_port": "Integer",
+        "destination_ip": "String",
+        "destination_port": "Integer",
+        "attack_type": "String",
+        "mitre_attack_id": "String",
+        "confidence_score": "Float [0.0 - 1.0]"
+      },
+      "status": "Not Completed"
+    },
+    {
+      "id": "FR-05.3",
+      "module": "Loglama, Eşleştirme ve Alarm Modülü",
+      "title": "Gerçek Zamanlı Bildirim Mekanizması",
+      "actor": "Alarm Tetikleyici",
+      "input": "Yüksek riskli sınıfına giren JSON log verisi",
+      "action": "Kritik bir saldırı algılandığında arayüze veya log paneline anlık bildirim fırlatmak.",
+      "output": "Real-time web socket veya push notification uyarısı",
+      "dependencies": [
+        "FR-05.2"
+      ],
+      "status": "Not Completed"
+    }
+  ]
+}
