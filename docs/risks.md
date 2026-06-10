@@ -66,3 +66,74 @@ donanımda düşük gecikmeyle çalışması gerekir.
 ### Durum
 
 İzleniyor
+
+---
+
+## R-03 — Eduroam DNS Filtrelemesi ve Statik IP Çakışması
+
+**Tespit Tarihi:** 2026-06-10
+**Önem:** Orta
+**İlgili Modül:** Ortam Kurulumu (FR-01), Dağıtım
+
+### Açıklama
+
+Saldırgan makinede statik IP'ye (172.19.237.200/20) geçildiğinde, eduroam
+ağının harici DNS sorgularını filtrelemesi nedeniyle ad çözümlemesi başarısız
+oldu (`Temporary failure resolving`). Bu durum, `apt update` ve paket kurulum
+adımlarını engelledi. Statik yapılandırmada 8.8.8.8 gibi harici DNS
+sunucularına erişim kampüs ağı tarafından kısıtlanmaktadır.
+
+### Önlem / Uygulanan Çözüm
+
+- Paket kurulumları geçici olarak DHCP moduna dönülerek (kampüsün yerel DNS'i
+  ile) tamamlandı.
+- Kalıcı statik yapılandırmada DNS sunucusu olarak harici adres yerine
+  **gateway IP'si (172.19.224.1)** tanımlandı; böylece ad çözümlemesi kampüs
+  içi DNS üzerinden çalışır hale getirildi.
+
+### Mimari Ders
+
+Kurumsal/kısıtlı ağlarda dağıtım yapan sistemler, harici DNS erişimine
+güvenmemelidir. Üretim/demo yapılandırması yerel DNS veya gateway tabanlı
+çözümlemeye dayanmalı; bağımlılık kurulumu (build-time) ile çalışma-zamanı
+(runtime) ağ varsayımları ayrıştırılmalıdır. Bu, projenin "kurumsal IT
+kısıtlamaları altında çalışabilirlik" hedefiyle doğrudan örtüşür.
+
+### Durum
+
+Çözüldü (yapılandırma kalıcılaştırıldı)
+
+---
+
+## R-04 — Python Bağımlılık Yönetimi (PEP 668)
+
+**Tespit Tarihi:** 2026-06-10
+**Önem:** Düşük
+**İlgili Modül:** Ortam Kurulumu (FR-01), İleride SLM Betikleri (FR-05+)
+
+### Açıklama
+
+Ubuntu 26.04, PEP 668 gereği sistem Python'una doğrudan `pip` kurulumunu
+engellemektedir (`externally-managed-environment`). Saldırgan makinede
+`slowloris` kurulumu bu engele takıldı ve `--break-system-packages` bayrağıyla
+aşıldı.
+
+### Risk Değerlendirmesi
+
+- **Saldırgan makine (kabul edilebilir):** Tek kullanımlık, izole bir test
+  ortamı olduğundan sistem Python'unun kirletilmesi kabul edilebilir bir
+  risktir.
+- **HIDS / SLM tarafı (kabul edilemez):** Tespit motoru ve gelecekteki SLM
+  betikleri için `--break-system-packages` KULLANILMAMALIDIR. Bağımlılık
+  kararsızlığını (dependency hell) önlemek için bu bileşenler izole bir
+  **sanal ortam (venv)** içinde çalıştırılmalıdır.
+
+### Önlem / Planlanan Çözüm
+
+- HIDS backend'i ve SLM bileşenleri `python3 -m venv` ile izole edilecek.
+- Bağımlılıklar `requirements.txt` ile sürüm sabitlenerek yönetilecek.
+- Üretim dağıtımı için (Raspberry Pi) Docker konteynerleştirme değerlendirilecek.
+
+### Durum
+
+İzleniyor (HIDS tarafında venv zorunlu kılındı)
