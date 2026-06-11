@@ -1,4 +1,5 @@
 {
 	"tool-1": "VMware Workstation Pro 26H1",
-	"tool-2": "Ubuntu Server 26.04 LTS"
+	"tool-2": "Ubuntu Server 26.04 LTS",
+	"model training": "Google Colab and T4 GPU"
 }
