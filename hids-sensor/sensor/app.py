@@ -231,8 +231,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="HIDS Sensor — Hybrid Detection")
     parser.add_argument("--iface", default=None, help="Ağ arayüzü")
     parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument("--bpf", default="host 192.168.137.115 or host 192.168.137.59",
-                        help="BPF filtre (VM IP'leri)")
+    parser.add_argument("--bpf", default="ip",
+                        help="BPF filtre. Varsayılan 'ip' = tüm IP trafiği. "
+                             "Daraltmak için: 'host <kurban_ip> or host <saldirgan_ip>'")
     parser.add_argument("--models", default="models", help="Model dizini")
     parser.add_argument("--relay", default="", help="Relay sunucu WebSocket URL (örn: wss://xxx.onrender.com/ingest)")
     args = parser.parse_args()
