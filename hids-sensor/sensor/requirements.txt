@@ -4,3 +4,4 @@ scapy>=2.5.0
 joblib>=1.4.0
 xgboost>=2.1.0
 numpy>=1.26.0
+websocket-client>=1.7.0

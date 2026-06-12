@@ -14,6 +14,7 @@ app.py içinde kullanımı:
 """
 
 import json
+import ssl
 import queue
 import threading
 import time
@@ -60,8 +61,9 @@ class CloudPusher:
         """Bağlan, kuyruktaki olayları gönder, koparsa yeniden bağlan."""
         while self._running:
             try:
+                sslopt = {"cert_reqs": ssl.CERT_NONE} if self.url.startswith("wss://") else None
                 self._ws = websocket.create_connection(
-                    self.url, timeout=10)
+                    self.url, timeout=10, sslopt=sslopt)
                 self._connected = True
                 print(f"[CLOUD] Bağlandı: {self.url}")
 

@@ -16,7 +16,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 // ⚠️ Kendi bulut sunucu IP'nle değiştir
-const String SERVER_URL = "ws://10.0.2.2:9000/stream"; // emülatör için 10.0.2.2
+const String SERVER_URL = "wss://hids-xgboost-shap-slm.onrender.com/stream";
 
 void main() => runApp(const SentinelApp());
 

@@ -11,7 +11,9 @@ Katman 2: XGBoost (akış-bazlı, pencere dolunca)
 import argparse
 import asyncio
 import json
+import os
 import queue
+import sys
 import threading
 import time
 from collections import deque
@@ -27,6 +29,12 @@ try:
 except ImportError:
     from sniffer import LiveSniffer, FlowFeatures
     from detector import AnomalyDetector, Detection
+
+# Cloud push entegrasyonu
+try:
+    from cloud_push import CloudPusher
+except ImportError:
+    CloudPusher = None
 
 # ── App ──
 app = FastAPI(title="HIDS Sensor API — Hybrid Detection")
@@ -45,6 +53,10 @@ _win = {"inbound": 0, "outbound": 0, "time": ""}
 
 # models/ dizininden XGBoost modeli yükle (varsa)
 detector = AnomalyDetector(models_dir="models")
+
+# Bulut relay'e push (Pi bağlıysa)
+RELAY_URL = os.environ.get("RELAY_URL", "")
+pusher = None
 
 
 def status_label(s: int) -> str:
@@ -128,6 +140,8 @@ async def consumer_loop():
                                f.protocol, f.timestamp)
                 recent_logs.appendleft(log)
                 await broadcast({"type": "log", "data": log})
+                if pusher and pusher.connected:
+                    pusher.push(log)
             else:
                 kpi["normal"] += 1
 
@@ -145,6 +159,8 @@ async def consumer_loop():
                 log = make_log(det)
                 recent_logs.appendleft(log)
                 await broadcast({"type": "log", "data": log})
+                if pusher and pusher.connected:
+                    pusher.push(log)
 
         # Trafik penceresi yayını
         if now - last_win >= 3:
@@ -218,11 +234,24 @@ if __name__ == "__main__":
     parser.add_argument("--bpf", default="host 192.168.238.100 or host 192.168.238.200",
                         help="BPF filtre (VM IP'leri)")
     parser.add_argument("--models", default="models", help="Model dizini")
+    parser.add_argument("--relay", default="", help="Relay sunucu WebSocket URL (örn: wss://xxx.onrender.com/ingest)")
     args = parser.parse_args()
 
 # Model dizinini güncelle
     if args.models != "models":
         detector.__init__(models_dir=args.models)
+
+    # Relay push başlat
+    global pusher
+    relay_url = args.relay or RELAY_URL
+    if relay_url and CloudPusher:
+        pusher = CloudPusher(relay_url)
+        pusher.start()
+        print(f"[HIDS] Bulut relay push aktif → {relay_url}")
+    elif relay_url:
+        print("[HIDS] UYARI: websocket-client kurulu değil. Push devre dışı.")
+    else:
+        print("[HIDS] Bulut push devre dışı (--relay veya RELAY_URL ayarlanmamış).")
 
     # Sniffer thread başlat
     t = threading.Thread(target=sniffer_thread, args=(args.iface, args.bpf), daemon=True)

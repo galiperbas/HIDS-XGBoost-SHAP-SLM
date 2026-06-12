@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentinel Mesh — HIDS Siber Güvenlik Kontrol Paneli</title>
+    <meta name="description" content="Sentinel Mesh: Gerçek zamanlı Host Tabanlı Saldırı Tespit Sistemi (HIDS) kontrol paneli. XGBoost ve SHAP ile güçlendirilmiş ağ güvenliği izleme.">
+    <meta name="author" content="Sentinel Mesh Project">
+    <meta name="theme-color" content="#0a0e14">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Sentinel Mesh — HIDS Kontrol Paneli">
+    <meta property="og:description" content="Gerçek zamanlı siber güvenlik izleme ve anomali tespit paneli. XGBoost + SHAP destekli.">
+    <meta property="og:type" content="website">
+    <meta property="og:locale" content="tr_TR">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+</head>
+<body>
+
+    <!-- Scan-line overlay -->
+    <div class="scanline-overlay" aria-hidden="true"></div>
+
+    <!-- ══════════════ HEADER ══════════════ -->
+    <header id="dashboard-header" class="header">
+        <div class="header-inner">
+            <div class="header-brand">
+                <div class="logo-icon" aria-hidden="true">
+                    <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+                        <path d="M18 2L4 9v9c0 8.3 5.97 16.06 14 18 8.03-1.94 14-9.7 14-18V9L18 2z" stroke="var(--accent)" stroke-width="2" fill="none"/>
+                        <path d="M18 8l-8 4v5c0 5 3.6 9.7 8 10.8 4.4-1.1 8-5.8 8-10.8v-5l-8-4z" fill="var(--accent)" opacity="0.15"/>
+                        <circle cx="18" cy="17" r="3" fill="var(--accent)"/>
+                        <line x1="18" y1="14" x2="18" y2="8" stroke="var(--accent)" stroke-width="1.5"/>
+                        <line x1="15" y1="19" x2="11" y2="22" stroke="var(--accent)" stroke-width="1.5"/>
+                        <line x1="21" y1="19" x2="25" y2="22" stroke="var(--accent)" stroke-width="1.5"/>
+                    </svg>
+                </div>
+                <div class="logo-text">
+                    <h1>SENTINEL <span class="logo-accent">MESH</span></h1>
+                    <span class="logo-subtitle">Host-Based Intrusion Detection System</span>
+                </div>
+            </div>
+
+            <div class="header-status">
+                <div id="connection-status" class="connection-badge offline" title="Bağlantı durumu">
+                    <span class="status-dot" aria-hidden="true"></span>
+                    <span class="status-text">BAĞLANIYOR</span>
+                </div>
+                <div id="sensor-count-badge" class="sensor-badge" title="Aktif sensör sayısı">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <rect x="2" y="3" width="20" height="14" rx="2"/>
+                        <line x1="8" y1="21" x2="16" y2="21"/>
+                        <line x1="12" y1="17" x2="12" y2="21"/>
+                    </svg>
+                    <span id="sensors-online-count">0</span> Sensör
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- ══════════════ MAIN ══════════════ -->
+    <main id="dashboard-main" class="main-content">
+
+        <!-- KPI CARDS ROW -->
+        <section id="kpi-section" class="kpi-grid" aria-label="Temel Performans Göstergeleri">
+
+            <article id="kpi-total-events" class="kpi-card kpi-accent-cyan" aria-label="Toplam Olay">
+                <div class="kpi-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2">
+                        <polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/>
+                    </svg>
+                </div>
+                <div class="kpi-body">
+                    <span class="kpi-label">Toplam Olay</span>
+                    <span id="kpi-total-value" class="kpi-value" data-value="0">0</span>
+                </div>
+            </article>
+
+            <article id="kpi-anomaly" class="kpi-card kpi-accent-warning" aria-label="Anomali Sayısı">
+                <div class="kpi-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                        <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                </div>
+                <div class="kpi-body">
+                    <span class="kpi-label">Anomali</span>
+                    <span id="kpi-anomaly-value" class="kpi-value" data-value="0">0</span>
+                </div>
+            </article>
+
+            <article id="kpi-critical" class="kpi-card kpi-accent-danger" aria-label="Kritik Olay Sayısı">
+                <div class="kpi-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        <line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+                </div>
+                <div class="kpi-body">
+                    <span class="kpi-label">Kritik</span>
+                    <span id="kpi-critical-value" class="kpi-value" data-value="0">0</span>
+                </div>
+            </article>
+
+            <article id="kpi-normal" class="kpi-card kpi-accent-success" aria-label="Normal Olay Sayısı">
+                <div class="kpi-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2">
+                        <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
+                        <polyline points="22,4 12,14.01 9,11.01"/>
+                    </svg>
+                </div>
+                <div class="kpi-body">
+                    <span class="kpi-label">Normal</span>
+                    <span id="kpi-normal-value" class="kpi-value" data-value="0">0</span>
+                </div>
+            </article>
+
+        </section>
+
+        <!-- MIDDLE ROW: Chart + Sensors -->
+        <div class="middle-row">
+
+            <!-- ATTACK DISTRIBUTION -->
+            <section id="attack-distribution-section" class="panel attack-panel" aria-label="Saldırı Dağılımı">
+                <div class="panel-header">
+                    <h2 class="panel-title">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" aria-hidden="true">
+                            <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/>
+                            <line x1="6" y1="20" x2="6" y2="14"/>
+                        </svg>
+                        Saldırı Dağılımı
+                    </h2>
+                </div>
+                <div id="attack-distribution-chart" class="chart-container">
+                    <div class="chart-empty-state">Veri bekleniyor…</div>
+                </div>
+            </section>
+
+            <!-- SENSOR STATUS -->
+            <section id="sensor-status-section" class="panel sensor-panel" aria-label="Sensör Durumu">
+                <div class="panel-header">
+                    <h2 class="panel-title">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" aria-hidden="true">
+                            <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/>
+                            <line x1="12" y1="17" x2="12" y2="21"/>
+                        </svg>
+                        Sensör Durumu
+                    </h2>
+                </div>
+                <div id="sensor-status-content" class="sensor-grid">
+                    <div class="sensor-empty-state">
+                        <div class="sensor-radar" aria-hidden="true">
+                            <div class="radar-ring"></div>
+                            <div class="radar-ring ring-2"></div>
+                            <div class="radar-ring ring-3"></div>
+                            <div class="radar-dot"></div>
+                        </div>
+                        <span>Sensörler taranıyor…</span>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+
+        <!-- LIVE FEED -->
+        <section id="live-feed-section" class="panel feed-panel" aria-label="Canlı Tespit Akışı">
+            <div class="panel-header">
+                <h2 class="panel-title">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" aria-hidden="true">
+                        <circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 010 8.49m-8.48-.01a6 6 0 010-8.49"/>
+                        <path d="M19.07 4.93a10 10 0 010 14.14M4.93 19.07a10 10 0 010-14.14"/>
+                    </svg>
+                    Canlı Tespit Akışı
+                </h2>
+                <span id="feed-live-indicator" class="live-badge">
+                    <span class="live-dot" aria-hidden="true"></span> CANLI
+                </span>
+            </div>
+            <div id="live-feed-list" class="feed-list" role="log" aria-live="polite">
+                <div class="feed-empty-state">
+                    <div class="typing-dots" aria-hidden="true">
+                        <span></span><span></span><span></span>
+                    </div>
+                    <span>Olaylar bekleniyor…</span>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ══════════════ TOAST CONTAINER ══════════════ -->
+    <div id="toast-container" class="toast-container" aria-live="assertive"></div>
+
+    <!-- ══════════════ FOOTER ══════════════ -->
+    <footer id="dashboard-footer" class="footer">
+        <div class="footer-inner">
+            <span class="footer-brand">© 2026 Sentinel Mesh Project</span>
+            <span class="footer-divider" aria-hidden="true">|</span>
+            <span class="footer-tech">XGBoost · SHAP · SLM · Raspberry Pi</span>
+            <span class="footer-divider" aria-hidden="true">|</span>
+            <span id="footer-clock" class="footer-clock"></span>
+        </div>
+    </footer>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
