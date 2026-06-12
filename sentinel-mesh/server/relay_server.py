@@ -178,6 +178,28 @@ async def api_stats():
         "demo_mode": DEMO_MODE and sensor_count == 0,
     }
 
+@app.post("/api/reset")
+async def api_reset():
+    """Tüm istatistikleri ve log geçmişini sıfırlar."""
+    global attack_distribution, log_history
+    stats["total_events"] = 0
+    stats["anomaly_count"] = 0
+    stats["critical_count"] = 0
+    stats["normal_count"] = 0
+    attack_distribution.clear()
+    log_history.clear()
+    
+    # Tüm bağlı dashboard istemcilerine sıfırlama sinyali gönder
+    await broadcast_to_mobile({
+        "type": "reset",
+        "stats": stats,
+        "attack_distribution": attack_distribution,
+        "recent_logs": []
+    })
+    print("[RESET] Tüm istatistikler ve loglar sıfırlandı.")
+    return {"status": "ok"}
+
+
 @app.get("/api/health")
 async def health():
     """Render health check & keep-alive."""

@@ -45,6 +45,7 @@
         toastContainer: $('#toast-container'),
         footerClock: $('#footer-clock'),
         liveIndicator: $('#feed-live-indicator'),
+        btnReset: $('#btn-reset'),
     };
 
     /* ═══════════════════════════════════════
@@ -424,6 +425,10 @@
                 handleInit(msg);
                 break;
 
+            case 'reset':
+                handleReset(msg);
+                break;
+
             case 'event':
                 handleEvent(msg);
                 break;
@@ -488,6 +493,30 @@
         showToast(title, body);
     }
 
+    function handleReset(msg) {
+        console.log('[Sentinel] Sıfırlama dalgası alındı');
+        state.stats = { 
+            total_events: 0, 
+            anomaly_count: 0, 
+            critical_count: 0, 
+            normal_count: 0, 
+            sensors_online: state.stats.sensors_online 
+        };
+        state.attackDistribution = {};
+        animateCounter(dom.kpiTotal, 0);
+        animateCounter(dom.kpiAnomaly, 0);
+        animateCounter(dom.kpiCritical, 0);
+        animateCounter(dom.kpiNormal, 0);
+        renderAttackChart();
+        dom.feedList.innerHTML = `
+            <div class="feed-empty-state">
+                <div class="typing-dots" aria-hidden="true">
+                    <span></span><span></span><span></span>
+                </div>
+                <span>Olaylar bekleniyor…</span>
+            </div>`;
+    }
+
     /* ═══════════════════════════════════════
        HTTP FALLBACK
        ═══════════════════════════════════════ */
@@ -534,6 +563,22 @@
 
         // HTTP fallback first
         fetchSummary();
+
+        // Reset button listener
+        if (dom.btnReset) {
+            dom.btnReset.addEventListener('click', async () => {
+                if (confirm('Tüm istatistikleri ve canlı akışı sıfırlamak istediğinize emin misiniz?')) {
+                    try {
+                        const res = await fetch('/api/reset', { method: 'POST' });
+                        if (res.ok) {
+                            console.log('[Sentinel] Sıfırlama talebi başarıyla gönderildi');
+                        }
+                    } catch (e) {
+                        console.error('[Sentinel] Sıfırlama hatası:', e);
+                    }
+                }
+            });
+        }
 
         // WebSocket connection
         connectWebSocket();
