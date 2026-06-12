@@ -10,5 +10,11 @@ services:
         value: "true"
       - key: PYTHON_VERSION
         value: "3.11.0"
+      # Gemini chatbot anahtarı — değeri YALNIZCA Render panelinden girilir,
+      # repoya yazılmaz (sync: false). GitHub'a anahtar gitmez.
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: "gemini-2.0-flash"
     plan: free
     healthCheckPath: /api/health

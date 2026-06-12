@@ -63,6 +63,30 @@ attack_distribution: dict[str, int] = {}
 DEMO_MODE = os.environ.get("DEMO_MODE", "true").lower() == "true"
 demo_event_id = 0
 
+# ── Gemini chatbot (ev kullanıcısı için güvenlik asistanı) ──
+# API anahtarı yalnızca sunucu tarafında env değişkeninde tutulur — tarayıcıya
+# ve koda ASLA gömülmez. Render → Environment → GEMINI_API_KEY olarak ayarlanır.
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+
+CHAT_SYSTEM = """Sen "Sentinel Mesh" ev ağı güvenlik asistanısın. Evdeki internet ağını \
+koruyan bir cihazın (Raspberry Pi sensörü) tespit ettiği durumları, TEKNİK BİLGİSİ OLMAYAN \
+bir ev kullanıcısına sade, sakin ve güven veren bir dille TÜRKÇE açıklarsın.
+
+Kurallar:
+- Jargon kullanma; kullanman gerekirse hemen günlük dille açıkla (örn. "port tarama = biri \
+evinin tüm kapı ve pencerelerini tek tek deneyip açık var mı diye bakıyor gibi").
+- Kısa ve net ol (2-5 cümle). Gerekirse "Ne yapmalıyım?" için kısa maddeler ver.
+- Panik yaratma; durumu olduğu gibi ama sakin anlat. Abartma, küçümseme.
+- SADECE aşağıdaki canlı ağ durumuna ve kullanıcının sorusuna dayan. Veri yoksa veya saldırı \
+yoksa "Şu an ağında olağandışı bir şey görünmüyor, her şey normal." de.
+- Ağ/ev güvenliği dışındaki konularda kibarca konuyu güvenliğe getir.
+- Emoji'yi çok az ve yerinde kullan.
+
+GÜNCEL AĞ DURUMU:
+{context}"""
+
 
 async def broadcast_to_mobile(message: dict):
     """Tüm mobil dashboard'lara mesaj gönder."""
@@ -215,6 +239,88 @@ async def summary():
         "attack_distribution": attack_distribution,
         "recent_logs": list(log_history)[:50],
     }
+
+
+def _security_context() -> str:
+    """Chatbot'a verilecek canlı ağ durumu özeti (Türkçe, sade)."""
+    lines = [
+        f"- Bağlı sensör sayısı: {stats['sensors_online']}",
+        f"- Toplam olay: {stats['total_events']}, "
+        f"anomali (şüpheli): {stats['anomaly_count']}, "
+        f"kritik: {stats['critical_count']}, normal: {stats['normal_count']}",
+    ]
+    if attack_distribution:
+        top = sorted(attack_distribution.items(), key=lambda x: -x[1])[:5]
+        lines.append("- Tespit edilen saldırı türleri: "
+                     + ", ".join(f"{k} ({v} kez)" for k, v in top))
+    else:
+        lines.append("- Henüz herhangi bir saldırı tespit edilmedi.")
+
+    recent = list(log_history)[:5]
+    if recent:
+        lines.append("- Son olaylar:")
+        for e in recent:
+            lines.append(
+                f"    • {e.get('server_time', '')} {e.get('attack_type', '?')} "
+                f"kaynak {e.get('source_ip', '?')} → hedef {e.get('destination_ip', '?')} "
+                f"(tehdit skoru {e.get('threat_score', 0)}/100)")
+    return "\n".join(lines)
+
+
+@app.post("/api/chat")
+async def chat(payload: dict):
+    """
+    Ev kullanıcısı güvenlik asistanı (Gemini).
+    API anahtarı sunucu tarafında kalır; tarayıcı yalnızca bu uç noktayla konuşur.
+    """
+    message = (payload.get("message") or "").strip()
+    history = payload.get("history") or []
+
+    if not message:
+        return {"reply": "Bir soru yazabilirsiniz. Örn: \"Ağımda tehlike var mı?\""}
+    if not GEMINI_API_KEY:
+        return {"reply": "Asistan henüz yapılandırılmadı (sunucuda API anahtarı tanımlı değil)."}
+
+    try:
+        import httpx
+    except ImportError:
+        return {"reply": "Asistan bileşeni sunucuda yüklü değil (httpx eksik)."}
+
+    system = CHAT_SYSTEM.format(context=_security_context())
+
+    # Sohbet geçmişini Gemini formatına çevir (rol: user / model)
+    contents = []
+    for h in history[-10:]:
+        role = "model" if h.get("role") in ("bot", "model", "assistant") else "user"
+        txt = (h.get("text") or "").strip()
+        if txt:
+            contents.append({"role": role, "parts": [{"text": txt}]})
+    contents.append({"role": "user", "parts": [{"text": message}]})
+
+    body = {
+        "system_instruction": {"parts": [{"text": system}]},
+        "contents": contents,
+        "generationConfig": {"temperature": 0.4, "maxOutputTokens": 800},
+    }
+
+    url = GEMINI_URL.format(model=GEMINI_MODEL)
+    try:
+        async with httpx.AsyncClient(timeout=25) as client:
+            r = await client.post(url, params={"key": GEMINI_API_KEY}, json=body)
+        data = r.json()
+        if r.status_code != 200:
+            print(f"[CHAT] Gemini hatası {r.status_code}: {str(data)[:200]}")
+            return {"reply": "Şu an asistana ulaşamadım, birazdan tekrar deneyin."}
+        candidates = data.get("candidates") or []
+        if not candidates:
+            # İçerik güvenlik filtresine takılmış olabilir
+            return {"reply": "Bu soruya şu an yanıt veremedim. Farklı bir şekilde sorabilir misiniz?"}
+        parts = candidates[0].get("content", {}).get("parts", [])
+        reply = "".join(p.get("text", "") for p in parts).strip()
+        return {"reply": reply or "Şu an net bir yanıt oluşturamadım."}
+    except Exception as e:
+        print(f"[CHAT] istisna: {e}")
+        return {"reply": "Bağlantı sorunu oldu, lütfen tekrar deneyin."}
 
 
 @app.websocket("/ingest")

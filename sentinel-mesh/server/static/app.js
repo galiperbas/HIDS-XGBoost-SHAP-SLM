@@ -592,3 +592,106 @@
     }
 
 })();
+
+
+/* ═══════════════════════════════════════════════════════════════
+   GÜVENLİK ASİSTANI (CHATBOT) — Gemini destekli, /api/chat ile konuşur
+   ═══════════════════════════════════════════════════════════════ */
+(function () {
+    'use strict';
+
+    const fab = document.getElementById('chat-fab');
+    const panel = document.getElementById('chat-panel');
+    const closeBtn = document.getElementById('chat-close');
+    const form = document.getElementById('chat-form');
+    const input = document.getElementById('chat-input');
+    const messages = document.getElementById('chat-messages');
+    const sendBtn = form ? form.querySelector('.chat-send') : null;
+    if (!fab || !panel || !form) return;
+
+    const history = [];   // {role:'user'|'bot', text}
+    let busy = false;
+
+    function esc(s) {
+        const d = document.createElement('div');
+        d.textContent = String(s || '');
+        return d.innerHTML;
+    }
+
+    function openPanel() {
+        panel.classList.add('open');
+        fab.classList.add('open');
+        panel.setAttribute('aria-hidden', 'false');
+        setTimeout(() => input.focus(), 150);
+    }
+    function closePanel() {
+        panel.classList.remove('open');
+        fab.classList.remove('open');
+        panel.setAttribute('aria-hidden', 'true');
+    }
+
+    fab.addEventListener('click', () =>
+        panel.classList.contains('open') ? closePanel() : openPanel());
+    closeBtn.addEventListener('click', closePanel);
+
+    function addMessage(text, who) {
+        const el = document.createElement('div');
+        el.className = 'chat-msg ' + who;
+        el.innerHTML = esc(text).replace(/\n/g, '<br>');
+        messages.appendChild(el);
+        messages.scrollTop = messages.scrollHeight;
+        return el;
+    }
+
+    function addTyping() {
+        const el = document.createElement('div');
+        el.className = 'chat-msg bot typing';
+        el.innerHTML = '<span></span><span></span><span></span>';
+        messages.appendChild(el);
+        messages.scrollTop = messages.scrollHeight;
+        return el;
+    }
+
+    async function send(text) {
+        if (busy || !text) return;
+        busy = true;
+        if (sendBtn) sendBtn.disabled = true;
+
+        const priorHistory = history.slice(-10);   // mevcut mesajı dahil etmeden gönder
+        addMessage(text, 'user');
+        history.push({ role: 'user', text });
+
+        const typing = addTyping();
+        try {
+            const res = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: text, history: priorHistory }),
+            });
+            const data = await res.json();
+            typing.remove();
+            const reply = (data && data.reply) || 'Şu an yanıt veremiyorum.';
+            addMessage(reply, 'bot');
+            history.push({ role: 'bot', text: reply });
+        } catch (e) {
+            typing.remove();
+            addMessage('Bağlantı hatası — lütfen biraz sonra tekrar deneyin.', 'bot');
+        } finally {
+            busy = false;
+            if (sendBtn) sendBtn.disabled = false;
+            input.focus();
+        }
+    }
+
+    form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const t = input.value.trim();
+        if (!t) return;
+        input.value = '';
+        send(t);
+    });
+
+    document.querySelectorAll('.chat-chip').forEach((chip) =>
+        chip.addEventListener('click', () => send(chip.textContent.trim())));
+
+})();
