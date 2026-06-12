@@ -67,7 +67,11 @@ demo_event_id = 0
 # API anahtarı yalnızca sunucu tarafında env değişkeninde tutulur — tarayıcıya
 # ve koda ASLA gömülmez. Render → Environment → GEMINI_API_KEY olarak ayarlanır.
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+# NOT: gemini-2.0-flash Google tarafından KAPATILDI (404 verir). Güncel GA flash:
+# gemini-2.5-flash (hızlı/ucuz) ve gemini-3.5-flash.
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+# Birincil model 404 verirse (model kapatılmışsa) sırayla denenecek güncel yedekler
+GEMINI_FALLBACKS = ["gemini-2.5-flash", "gemini-3.5-flash", "gemini-flash-latest"]
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 CHAT_SYSTEM = """Sen "Sentinel Mesh" ev ağı güvenlik asistanısın. Evdeki internet ağını \
@@ -303,21 +307,40 @@ async def chat(payload: dict):
         "generationConfig": {"temperature": 0.4, "maxOutputTokens": 800},
     }
 
-    url = GEMINI_URL.format(model=GEMINI_MODEL)
+    # Denenecek modeller: önce yapılandırılan, sonra güncel yedekler (404'a karşı)
+    models_to_try = []
+    for m in [GEMINI_MODEL] + GEMINI_FALLBACKS:
+        if m and m not in models_to_try:
+            models_to_try.append(m)
+
     try:
         async with httpx.AsyncClient(timeout=25) as client:
-            r = await client.post(url, params={"key": GEMINI_API_KEY}, json=body)
-        data = r.json()
-        if r.status_code != 200:
-            print(f"[CHAT] Gemini hatası {r.status_code}: {str(data)[:200]}")
-            return {"reply": "Şu an asistana ulaşamadım, birazdan tekrar deneyin."}
-        candidates = data.get("candidates") or []
-        if not candidates:
-            # İçerik güvenlik filtresine takılmış olabilir
-            return {"reply": "Bu soruya şu an yanıt veremedim. Farklı bir şekilde sorabilir misiniz?"}
-        parts = candidates[0].get("content", {}).get("parts", [])
-        reply = "".join(p.get("text", "") for p in parts).strip()
-        return {"reply": reply or "Şu an net bir yanıt oluşturamadım."}
+            for model in models_to_try:
+                url = GEMINI_URL.format(model=model)
+                r = await client.post(url, params={"key": GEMINI_API_KEY}, json=body)
+
+                # Model kapatılmış/bulunamadı → bir sonraki yedeği dene
+                if r.status_code == 404:
+                    print(f"[CHAT] model 404 (kapalı olabilir): {model} → yedeğe geçiliyor")
+                    continue
+
+                data = r.json()
+                if r.status_code != 200:
+                    print(f"[CHAT] Gemini hatası {r.status_code} ({model}): {str(data)[:200]}")
+                    return {"reply": "Şu an asistana ulaşamadım, birazdan tekrar deneyin."}
+
+                candidates = data.get("candidates") or []
+                if not candidates:
+                    # İçerik güvenlik filtresine takılmış olabilir
+                    return {"reply": "Bu soruya şu an yanıt veremedim. Farklı bir şekilde sorabilir misiniz?"}
+                parts = candidates[0].get("content", {}).get("parts", [])
+                reply = "".join(p.get("text", "") for p in parts).strip()
+                print(f"[CHAT] yanıt verildi (model={model})")
+                return {"reply": reply or "Şu an net bir yanıt oluşturamadım."}
+
+        # Tüm modeller 404 verdi
+        print(f"[CHAT] tüm modeller 404: {models_to_try}")
+        return {"reply": "Asistan modeline ulaşılamadı. Model adı güncel olmayabilir."}
     except Exception as e:
         print(f"[CHAT] istisna: {e}")
         return {"reply": "Bağlantı sorunu oldu, lütfen tekrar deneyin."}
