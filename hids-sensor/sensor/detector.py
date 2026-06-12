@@ -141,8 +141,33 @@ class AnomalyDetector:
         except Exception as e:
             print(f"[XGBoost] Tahmin hatası: {e}")
 
+    # ── AI Agent Security imzaları (OWASP LLM Top 10) ──
+    # LLM01: Prompt Injection / Jailbreak  | LLM06: Hassas veri sızdırma
+    LLM_INJECTION_SIGS = (
+        "ignore previous", "ignore all previous", "disregard previous",
+        "disregard all", "forget your instructions", "system prompt",
+        "you are now", "act as", "developer mode", "jailbreak",
+        "do anything now", "dan mode", "reveal your", "print your instructions",
+        "</system>", "<|im_start|>", "bypass your", "override your",
+    )
+    LLM_EXFIL_SIGS = (
+        "api_key", "api-key", "secret_key", "begin private key",
+        "password=", "/etc/passwd", "credit card", "ssn",
+    )
+    AI_SERVICE_PORTS = (80, 8080, 8000, 5000, 3000, 11434)  # web + AI API portları
+
     def _rule_based(self, f: FlowFeatures) -> Optional[Detection]:
         """Katman 1: bilinen saldırı imzaları."""
+
+        # ── Katman 0: AI Agent Security — payload-bazlı (OWASP LLM Top 10) ──
+        if f.payload and f.dst_port in self.AI_SERVICE_PORTS:
+            low = f.payload.lower()
+            if any(sig in low for sig in self.LLM_INJECTION_SIGS):
+                print(f"[AI-SEC] LLM_PromptInjection {f.source_ip}→{f.destination_ip}:{f.dst_port}")
+                return Detection("ANOMALY", "LLM_PromptInjection", 92, 0.93, "rule", 0)
+            if any(sig in low for sig in self.LLM_EXFIL_SIGS):
+                print(f"[AI-SEC] LLM_DataExfil {f.source_ip}→{f.destination_ip}:{f.dst_port}")
+                return Detection("ANOMALY", "LLM_DataExfil", 88, 0.90, "rule", 0)
 
         # Port Scan
         if f.unique_ports_last_sec >= 15:

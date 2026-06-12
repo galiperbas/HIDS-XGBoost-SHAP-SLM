@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Callable, Optional
 
-from scapy.all import sniff, IP, TCP, UDP, ICMP
+from scapy.all import sniff, IP, TCP, UDP, ICMP, Raw
 
 
 @dataclass
@@ -32,6 +32,8 @@ class FlowFeatures:
     packets_last_sec: int
     unique_ports_last_sec: int
     syn_count_last_sec: int
+    # Uygulama katmanı payload (HTTP/AI servis isteği — prompt injection tespiti için)
+    payload: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -103,6 +105,14 @@ class LiveSniffer:
 
         pkts, uports, syns = self._window_stats(ip.src, dst_port, is_syn)
 
+        # Uygulama katmanı payload (varsa) — ilk 512 bayt yeterli
+        payload = ""
+        if pkt.haslayer(Raw):
+            try:
+                payload = bytes(pkt[Raw].load)[:512].decode("latin-1", "ignore")
+            except Exception:
+                payload = ""
+
         return FlowFeatures(
             timestamp=datetime.now().strftime("%H:%M:%S.%f")[:-3],
             source_ip=ip.src,
@@ -116,6 +126,7 @@ class LiveSniffer:
             packets_last_sec=pkts,
             unique_ports_last_sec=uports,
             syn_count_last_sec=syns,
+            payload=payload,
         )
 
     def start(self, callback: Callable[[FlowFeatures], None]):
