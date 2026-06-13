@@ -1,5 +1,6 @@
 # Uç Cihazlarda Çalışan, SHAP Açıklanabilirlik ve SLM Entegreli Saldırı Tespit Sistemi
 
+![Sistem Mimarisi: VMware üzerinde çalışan iki sanal sunucu (simülsayon ortamı), çevrimiçi gösterge paneli/monitörü (relay sunucu) ve uç cihaz/Raspberry Pi 4 bağlantısı](image-and-videos/image.jpg)
 
 Bu proje, uç (edge) veya sis (fog) bilişim ağlarındaki (Örn: IoT ortamları, Raspberry Pi istasyonları vb.) tehditleri anlık olarak algılayabilmek amacıyla, bulut bağımlılığı olmayan on-device (cihaz-üstü) bir Siber Saldırı Tespit Sistemi (IDS) prototipidir. 
 
