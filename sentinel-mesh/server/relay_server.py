@@ -77,6 +77,41 @@ def _is_demo() -> bool:
     """Şu an gösterilen veri simüle mi? (DEMO açık ve gerçek sensör yokken)."""
     return DEMO_MODE and sensor_count == 0
 
+
+# ── Kritik saldırı bildirimi (Telegram — anlık mobil push, ücretsiz) ──
+# Bot oluştur: Telegram'da @BotFather → /newbot → token al. Chat ID için bota
+# mesaj atıp https://api.telegram.org/bot<token>/getUpdates aç. Değerleri Render
+# Environment'a TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID olarak gir.
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
+ALERT_COOLDOWN_SEC = int(os.environ.get("ALERT_COOLDOWN_SEC", "60"))
+_last_alert: dict[str, float] = {}
+
+
+async def notify_critical(event: dict):
+    """Kritik saldırıda Telegram'a anlık bildirim. Aynı tür için cooldown ile
+    flood sırasında yüzlerce mesaj atılması önlenir."""
+    if not (TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID):
+        return
+    atype = event.get("attack_type", "?")
+    now = time.time()
+    if now - _last_alert.get(atype, 0) < ALERT_COOLDOWN_SEC:
+        return
+    _last_alert[atype] = now
+    text = (f"🚨 HIDS Uyarısı: {atype}\n"
+            f"{event.get('source_ip', '?')} → {event.get('destination_ip', '?')}\n"
+            f"Tehdit skoru: {event.get('threat_score', 0)}/100")
+    if event.get("mitre"):
+        text += f"\nMITRE ATT&CK: {event['mitre']}"
+    try:
+        import httpx
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        async with httpx.AsyncClient(timeout=10) as client:
+            await client.post(url, json={"chat_id": TELEGRAM_CHAT_ID, "text": text})
+        print(f"[ALERT] Telegram bildirimi gönderildi: {atype}")
+    except Exception as e:
+        print(f"[ALERT] Telegram gönderilemedi: {e}")
+
 # ── Gemini chatbot (ev kullanıcısı için güvenlik asistanı) ──
 # API anahtarı yalnızca sunucu tarafında env değişkeninde tutulur — tarayıcıya
 # ve koda ASLA gömülmez. Render → Environment → GEMINI_API_KEY olarak ayarlanır.
@@ -430,6 +465,8 @@ async def ingest(ws: WebSocket):
                             f"(tehdit: {score})",
                     "data": event,
                 })
+                # Anlık mobil bildirim (Telegram) — yalnızca gerçek sensör olaylarında
+                await notify_critical(event)
 
     except WebSocketDisconnect:
         sensor_count -= 1

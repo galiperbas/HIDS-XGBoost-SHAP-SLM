@@ -17,6 +17,13 @@
         COUNTER_ANIMATION_MS: 600,
     };
 
+    /* MITRE ATT&CK eşlemesi (canlı veri 'mitre' taşımazsa istemci tarafı yedek) */
+    const MITRE_MAP = {
+        PortScan: 'T1046', Recon_Scan: 'T1046',
+        SYN_Flood: 'T1498', DoS_Flood: 'T1498', DDoS_HTTP: 'T1498', Mirai_Botnet: 'T1498',
+        BruteForce: 'T1110', Slowloris: 'T1499', ML_Detected: 'T1190',
+    };
+
     /* ─── STATE ─── */
     const state = {
         ws: null,
@@ -230,6 +237,7 @@
         const tClass = threatClass(d.threat_score);
         const methodClass = (d.method || '').toLowerCase() === 'xgboost' ? 'method-xgboost' : 'method-rule';
         const methodLabel = (d.method || '').toLowerCase() === 'xgboost' ? 'XGBoost' : 'Kural';
+        const mitre = d.mitre || MITRE_MAP[d.attack_type] || '';
 
         // Açıklanabilirlik: XGBoost SHAP öznitelikleri (canlı) ya da kural/demo gerekçesi
         let whyText = '';
@@ -257,6 +265,7 @@
                 </span>
                 <div class="feed-entry-meta">
                     <span class="method-badge ${methodClass}">${methodLabel}</span>
+                    ${mitre ? `<span class="mitre-badge" title="MITRE ATT&CK tekniği">${esc(mitre)}</span>` : ''}
                 </div>
                 ${whyHtml}
             </div>
@@ -488,31 +497,53 @@
         if ('demo_mode' in msg) updateModeBadge(msg.demo_mode);
     }
 
+    /* ─── Throttled rendering: flood altında tarayıcı donmasın ───
+       Sayaçlar her olayda anında güncellenir (state), ama pahalı DOM işleri
+       (feed satırı, grafik, KPI animasyonu) 250 ms'de bir TOPLU yapılır. */
+    let _feedBuffer = [];
+    let _flushTimer = null;
+    let _kpiDirty = false;
+    let _chartDirty = false;
+
+    function scheduleFlush() {
+        if (_flushTimer) return;
+        _flushTimer = setTimeout(flushRender, 250);
+    }
+
+    function flushRender() {
+        _flushTimer = null;
+        if (_feedBuffer.length) {
+            const batch = _feedBuffer.splice(0, _feedBuffer.length);
+            // Yalnızca en yeni MAX_FEED_ENTRIES kadarını render et (DOM thrash önle)
+            const toRender = batch.slice(-CONFIG.MAX_FEED_ENTRIES);
+            for (const d of toRender) addFeedEntry(d, true);
+        }
+        if (_kpiDirty) { _kpiDirty = false; updateKPIs(state.stats); }
+        if (_chartDirty) { _chartDirty = false; renderAttackChart(); }
+    }
+
     function handleEvent(msg) {
         const d = msg.data || msg;
 
-        // Update KPIs incrementally
+        // Sayaçları anında güncelle (ucuz)
         state.stats.total_events++;
         const isAnomaly = d.label === 'ANOMALY';
         if (isAnomaly) {
             state.stats.anomaly_count++;
-            if (Number(d.threat_score) >= 70) {
-                state.stats.critical_count++;
+            if (Number(d.threat_score) >= 70) state.stats.critical_count++;
+            if (d.attack_type && d.attack_type !== 'BENIGN') {
+                state.attackDistribution[d.attack_type] = (state.attackDistribution[d.attack_type] || 0) + 1;
+                _chartDirty = true;
             }
         } else {
             state.stats.normal_count++;
         }
 
-        updateKPIs(state.stats);
-
-        // Update attack distribution (only for anomalies)
-        if (isAnomaly && d.attack_type && d.attack_type !== 'BENIGN') {
-            state.attackDistribution[d.attack_type] = (state.attackDistribution[d.attack_type] || 0) + 1;
-            renderAttackChart();
-        }
-
-        // Add to feed
-        addFeedEntry(d, true);
+        // Pahalı render'ları kuyruğa al (throttle)
+        _kpiDirty = true;
+        _feedBuffer.push(d);
+        if (_feedBuffer.length > 300) _feedBuffer = _feedBuffer.slice(-300);
+        scheduleFlush();
     }
 
     function handleAlert(msg) {

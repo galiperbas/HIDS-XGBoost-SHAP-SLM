@@ -78,6 +78,20 @@ def log_to_disk(log: dict):
         pass
 
 
+# MITRE ATT&CK eşlemesi (FR-05.1) — tespit türü -> teknik ID
+MITRE_MAP = {
+    "PortScan": "T1046",      # Network Service Discovery
+    "SYN_Flood": "T1498",     # Network Denial of Service
+    "DoS_Flood": "T1498",
+    "DDoS_HTTP": "T1498",
+    "Mirai_Botnet": "T1498",
+    "Recon_Scan": "T1046",
+    "BruteForce": "T1110",    # Brute Force
+    "Slowloris": "T1499",     # Endpoint Denial of Service
+    "ML_Detected": "T1190",   # Exploit Public-Facing Application (genel anomali)
+}
+
+
 def status_label(s: int) -> str:
     return "CRITICAL" if s >= 70 else "MEDIUM" if s >= 35 else "SAFE"
 
@@ -107,6 +121,7 @@ def make_log(det: Detection, src: str = "", dst: str = "",
         "status": status_label(det.threat_score),
         "label": det.label,
         "attack_type": det.attack_type,
+        "mitre": MITRE_MAP.get(det.attack_type, ""),
         "method": det.method,
         "confidence": det.confidence,
         "flow_packets": det.flow_packets,
