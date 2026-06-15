@@ -50,9 +50,10 @@ ssh "${PI_USER}@${PI_IP}" "sudo cp /tmp/hids_models/* ${REMOTE_DIR}/models/"
 echo "[4/4] Çalıştırma scriptleri kopyalanıyor..."
 scp "${SCRIPT_DIR}/pi-setup.sh" \
     "${SCRIPT_DIR}/run.sh" \
+    "${SCRIPT_DIR}/mitm-run.sh" \
     "${PI_USER}@${PI_IP}:/tmp/"
 
-ssh "${PI_USER}@${PI_IP}" "sudo cp /tmp/pi-setup.sh /tmp/run.sh ${REMOTE_DIR}/ && sudo chmod +x ${REMOTE_DIR}/*.sh"
+ssh "${PI_USER}@${PI_IP}" "sudo cp /tmp/pi-setup.sh /tmp/run.sh /tmp/mitm-run.sh ${REMOTE_DIR}/ && sudo chmod +x ${REMOTE_DIR}/*.sh"
 
 echo ""
 echo "=========================================="

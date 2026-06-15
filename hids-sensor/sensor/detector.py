@@ -12,7 +12,7 @@ import os
 import time
 import json
 import numpy as np
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 try:
@@ -35,6 +35,8 @@ class Detection:
     flow_src: str = ""
     flow_dst: str = ""
     flow_packets: int = 0
+    # Açıklanabilirlik: tahmini en çok etkileyen öznitelikler (TreeSHAP)
+    shap_top: list = field(default_factory=list)
 
 
 class AnomalyDetector:
@@ -138,12 +140,17 @@ class AnomalyDetector:
                 flow_packets=len(state.packet_sizes),
             )
 
+            # Açıklanabilirlik: yalnızca anomalilerde SHAP hesapla (Pi'yi yormamak için)
+            if is_anomaly:
+                det.shap_top = self._explain(vec)
+
             self._pending_detections.append(det)
 
             if is_anomaly:
+                why = ", ".join(s["feature"] for s in det.shap_top[:3])
                 print(f"[XGBoost] ANOMALY {state.src_ip}→{state.dst_ip} "
                       f"score={score} conf={det.confidence} "
-                      f"pkts={det.flow_packets} ({elapsed:.1f}ms)")
+                      f"pkts={det.flow_packets} ({elapsed:.1f}ms) neden=[{why}]")
             else:
                 # Normal akışları da logla (daha az sıklıkla)
                 if len(state.packet_sizes) > 10:
@@ -152,6 +159,25 @@ class AnomalyDetector:
 
         except Exception as e:
             print(f"[XGBoost] Tahmin hatası: {e}")
+
+    def _explain(self, scaled_vec: np.ndarray) -> list:
+        """
+        TreeSHAP açıklaması — XGBoost'un yerel `pred_contribs` özelliğiyle.
+        Ek 'shap' kütüphanesi GEREKMEZ (Pi-dostu); tahmini en çok etkileyen
+        öznitelikleri (mutlak SHAP katkısına göre) döndürür.
+        """
+        try:
+            import xgboost as xgb
+            booster = self.model.get_booster()
+            dm = xgb.DMatrix(scaled_vec)
+            # pred_contribs: her öznitelik için SHAP katkısı + son sütun bias
+            contribs = booster.predict(dm, pred_contribs=True)[0]
+            pairs = sorted(zip(FEATURE_NAMES, contribs[:-1]),
+                           key=lambda x: -abs(x[1]))
+            return [{"feature": f, "value": round(float(v), 4)} for f, v in pairs[:5]]
+        except Exception as e:
+            print(f"[SHAP] açıklama hesaplanamadı: {e}")
+            return []
 
     def _rule_based(self, f: FlowFeatures) -> Optional[Detection]:
         """Katman 1: bilinen saldırı imzaları."""

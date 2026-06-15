@@ -231,6 +231,18 @@
         const methodClass = (d.method || '').toLowerCase() === 'xgboost' ? 'method-xgboost' : 'method-rule';
         const methodLabel = (d.method || '').toLowerCase() === 'xgboost' ? 'XGBoost' : 'Kural';
 
+        // Açıklanabilirlik: XGBoost SHAP öznitelikleri (canlı) ya da kural/demo gerekçesi
+        let whyText = '';
+        if (Array.isArray(d.shap_top) && d.shap_top.length) {
+            whyText = 'Neden: ' + d.shap_top.slice(0, 3)
+                .map(s => esc(s.feature)).join(', ');
+        } else if (d.reason) {
+            whyText = 'Neden: ' + esc(d.reason);
+        }
+        const whyHtml = whyText
+            ? `<div class="feed-entry-why" title="Modelin/kuralın kararını açıklayan göstergeler">${whyText}</div>`
+            : '';
+
         const entry = document.createElement('div');
         entry.className = `feed-entry threat-${tClass}`;
         entry.innerHTML = `
@@ -246,6 +258,7 @@
                 <div class="feed-entry-meta">
                     <span class="method-badge ${methodClass}">${methodLabel}</span>
                 </div>
+                ${whyHtml}
             </div>
             <div class="feed-entry-right">
                 <span class="threat-badge threat-${tClass}">${threatLabel(d.threat_score)} ${Math.round(d.threat_score || 0)}</span>

@@ -110,6 +110,7 @@ def make_log(det: Detection, src: str = "", dst: str = "",
         "confidence": det.confidence,
         "flow_packets": det.flow_packets,
         "inference_ms": det.inference_ms,
+        "shap_top": det.shap_top,
     }
 
 

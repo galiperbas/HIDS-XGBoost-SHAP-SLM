@@ -279,10 +279,15 @@ def _security_context() -> str:
     if recent:
         lines.append("- Son olaylar:")
         for e in recent:
-            lines.append(
-                f"    • {e.get('server_time', '')} {e.get('attack_type', '?')} "
-                f"kaynak {e.get('source_ip', '?')} → hedef {e.get('destination_ip', '?')} "
-                f"(tehdit skoru {e.get('threat_score', 0)}/100)")
+            line = (f"    • {e.get('server_time', '')} {e.get('attack_type', '?')} "
+                    f"kaynak {e.get('source_ip', '?')} → hedef {e.get('destination_ip', '?')} "
+                    f"(tehdit skoru {e.get('threat_score', 0)}/100)")
+            # Açıklanabilirlik: modeli en çok etkileyen öznitelikler (varsa)
+            shap_top = e.get("shap_top") or []
+            if shap_top:
+                feats = ", ".join(s.get("feature", "") for s in shap_top[:3])
+                line += f" — kararı en çok etkileyen göstergeler: {feats}"
+            lines.append(line)
     return "\n".join(lines)
 
 
