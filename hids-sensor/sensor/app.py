@@ -58,6 +58,25 @@ detector = AnomalyDetector(models_dir="models")
 RELAY_URL = os.environ.get("RELAY_URL", "")
 pusher = None
 
+# Kalıcı denetim logu (FR-05.2) — her tespit tek satır JSON olarak diske yazılır.
+# evaluate_live.ipynb bu dosyayı ground_truth.csv ile eşleştirip metrik üretir.
+import pathlib
+LOG_DIR = pathlib.Path(os.environ.get("HIDS_LOG_DIR", "logs"))
+try:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+except Exception:
+    pass
+DETECTION_LOG = LOG_DIR / "detections.jsonl"
+
+
+def log_to_disk(log: dict):
+    """Tespiti detections.jsonl'a ekle (tam ISO zaman damgasıyla)."""
+    try:
+        with open(DETECTION_LOG, "a", encoding="utf-8") as f:
+            f.write(json.dumps(log, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
 
 def status_label(s: int) -> str:
     return "CRITICAL" if s >= 70 else "MEDIUM" if s >= 35 else "SAFE"
@@ -79,6 +98,7 @@ def make_log(det: Detection, src: str = "", dst: str = "",
     return {
         "id": str(kpi["total"]),
         "timestamp": ts or datetime.now().strftime("%H:%M:%S.%f")[:-3],
+        "ts_iso": datetime.now().isoformat(timespec="milliseconds"),
         "source_ip": det.flow_src or src,
         "destination_ip": det.flow_dst or dst,
         "protocol": proto or det.attack_type,
@@ -89,6 +109,7 @@ def make_log(det: Detection, src: str = "", dst: str = "",
         "method": det.method,
         "confidence": det.confidence,
         "flow_packets": det.flow_packets,
+        "inference_ms": det.inference_ms,
     }
 
 
@@ -139,6 +160,7 @@ async def consumer_loop():
                 log = make_log(rule_det, f.source_ip, f.destination_ip,
                                f.protocol, f.timestamp)
                 recent_logs.appendleft(log)
+                log_to_disk(log)
                 await broadcast({"type": "log", "data": log})
                 if pusher and pusher.connected:
                     pusher.push(log)
@@ -158,6 +180,7 @@ async def consumer_loop():
                         kpi["critical"] += 1
                 log = make_log(det)
                 recent_logs.appendleft(log)
+                log_to_disk(log)
                 await broadcast({"type": "log", "data": log})
                 if pusher and pusher.connected:
                     pusher.push(log)

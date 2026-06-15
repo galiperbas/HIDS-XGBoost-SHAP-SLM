@@ -18,9 +18,9 @@ echo "  Pi:   ${PI_USER}@${PI_IP}"
 echo "  Hedef: ${REMOTE_DIR}"
 echo ""
 
-# 1. Pi'de dizinleri oluştur
+# 1. Pi'de dizinleri oluştur (hedef + scp için geçici /tmp dizinleri)
 echo "[1/4] Pi'de dizinler oluşturuluyor..."
-ssh "${PI_USER}@${PI_IP}" "sudo mkdir -p ${REMOTE_DIR}/{sensor,models,logs}"
+ssh "${PI_USER}@${PI_IP}" "sudo mkdir -p ${REMOTE_DIR}/sensor ${REMOTE_DIR}/models ${REMOTE_DIR}/logs && mkdir -p /tmp/hids_sensor /tmp/hids_models"
 
 # 2. Sensör kodlarını kopyala
 echo "[2/4] Sensör kodları kopyalanıyor..."
