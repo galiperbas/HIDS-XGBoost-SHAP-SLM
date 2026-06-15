@@ -1,5 +1,90 @@
 {
-	"tool-1": "VMware Workstation Pro 26H1",
-	"tool-2": "Ubuntu Server 26.04 LTS",
-	"model training": "Google Colab and T4 GPU"
+  "_note": "Projede kullanılan araç, kütüphane ve sürümlerin dökümantasyonu. Pi sürümleri pi-setup.sh ile, model eğitim sürümleri Colab defteriyle, relay sürümleri Render ile birebir tutulmalıdır.",
+  "environment": {
+    "host_os": "Windows 11 Pro",
+    "host_internet_share": "ICS / Mobil Hotspot — testbed alt ağı 192.168.137.0/24 (host gateway .1)",
+    "hypervisor": "VMware Workstation Pro",
+    "vm_os": "Ubuntu Server",
+    "vm_network_mode": "Bridged",
+    "campus_network": "eduroam (apt/pip için DNS filtreleme riski — DNS=192.168.137.1 kullan)"
+  },
+  "hardware": {
+    "edge_device": "Raspberry Pi 4 (8GB RAM)",
+    "architecture": "aarch64 (ARM64)",
+    "os": "Raspberry Pi OS (Debian, kernel 6.6.74, Python 3.11)",
+    "connection": "Ethernet (RJ45), inline (ARP-MITM ile)"
+  },
+  "model_training": {
+    "platform": "Google Colab",
+    "accelerator": "T4 GPU (eğitim); çıkarım Pi'de CPU",
+    "dataset": "CICIoT2023 (kagglehub: madhavmalhotra/unb-cic-iot-dataset)",
+    "notebook": "colab/CICIoT2023_XGBoost_Training.ipynb",
+    "libraries": {
+      "python": "3.x (Colab)",
+      "xgboost": "2.x",
+      "scikit-learn": "1.6.1",
+      "imbalanced-learn": "SMOTE (yalnızca eğitim setine)",
+      "shap": "eğitim aşaması küresel açıklanabilirlik (beeswarm/bar)",
+      "kagglehub": "veri indirme",
+      "joblib": "model/scaler serileştirme",
+      "pandas": "veri işleme",
+      "numpy": "1.26.x",
+      "matplotlib": "grafikler",
+      "seaborn": "confusion matrix"
+    }
+  },
+  "model_artifact": {
+    "algorithm": "XGBoost (binary: normal/attack)",
+    "n_features": 40,
+    "feature_policy": "Yalnızca canlı ortamda sadık hesaplanabilen öznitelikler; uydurma kompozit yok (train/serve parity). Bkz. hids-sensor/sensor/flow_aggregator.py FEATURE_NAMES",
+    "n_estimators": 150,
+    "max_depth": 8,
+    "preprocessing": "RobustScaler + SMOTE (split SONRASI scale, leakage yok)",
+    "explainability_live": "TreeSHAP via XGBoost pred_contribs (ek 'shap' kütüphanesi GEREKMEZ, Pi-dostu)",
+    "files": ["xgboost_ciciot2023.joblib", "scaler.joblib", "feature_names.json", "model_meta.json"]
+  },
+  "pi_sensor": {
+    "_note": "pi-setup.sh ile kurulur. scikit-learn ŞART (XGBClassifier+RobustScaler unpickle için). Eğitimle aynı 1.6.1.",
+    "python": "3.11",
+    "fastapi": "0.115.6",
+    "uvicorn[standard]": "0.30.6",
+    "scapy": "2.6.1",
+    "joblib": "1.4.2",
+    "xgboost": "2.1.3",
+    "scikit-learn": "1.6.1",
+    "numpy": "1.26.4",
+    "websocket-client": "1.8.0",
+    "system_packages": ["libpcap-dev", "tcpdump", "dsniff (arpspoof, inline MITM için)"]
+  },
+  "relay_server": {
+    "_note": "Render (free tier) üzerinde barındırılır. sentinel-mesh/server/requirements.txt",
+    "platform": "Render",
+    "python": "3.11.0",
+    "fastapi": ">=0.115.0",
+    "uvicorn[standard]": ">=0.30.0",
+    "websocket-client": ">=1.7.0",
+    "aiofiles": ">=23.0.0",
+    "httpx": ">=0.27.0 (Gemini chatbot istekleri için)",
+    "env_vars": ["DEMO_MODE", "GEMINI_API_KEY", "GEMINI_MODEL", "INGEST_TOKEN"]
+  },
+  "dashboard": {
+    "type": "Web (statik HTML/CSS/JS, vanilla)",
+    "files": "sentinel-mesh/server/static/ (index.html, app.js, style.css)",
+    "features": "Canlı tespit akışı (WebSocket), KPI, saldırı dağılımı, DEMO/CANLI rozeti, SHAP 'Neden' satırı, Gemini chatbot",
+    "chatbot_llm": "Google Gemini (bulut, gemini-2.5-flash)"
+  },
+  "mobile_app": {
+    "framework": "Flutter (Dart)",
+    "files": "sentinel-mesh/flutter_app/",
+    "deps": ["web_socket_channel ^2.4.0", "fl_chart ^0.66.0", "intl ^0.18.1"],
+    "status": "Prototip (canlı dashboard aynası); FCM push gelecek çalışma"
+  },
+  "evaluation": {
+    "_note": "Tez Results için canlı testbed değerlendirmesi. experiments/",
+    "attack_tools": ["nmap (PortScan)", "hping3 (SYN/UDP/ICMP flood)", "hydra (SSH brute)", "slowhttptest (Slowloris)"],
+    "ground_truth": "experiments/attack-runner.sh -> ground_truth.csv (MITRE ID + zaman)",
+    "detection_log": "sensör -> logs/detections.jsonl (ts_iso + inference_ms + shap_top)",
+    "analysis_notebook": "experiments/evaluate_live.ipynb (pandas, matplotlib)"
+  },
+  "frameworks": ["MITRE ATT&CK", "OWASP (genel)"]
 }
