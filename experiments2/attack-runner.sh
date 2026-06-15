@@ -37,7 +37,8 @@ echo "  Süre/saldırı: ${DUR}s  Boşluk: ${GAP}s  Flood hızı: ~$((1000000/RA
 echo "  Çıktı: $OUT"
 echo "============================================"
 
-[ -f "$OUT" ] || echo "start_iso,end_iso,start_epoch,end_epoch,label,attack_type,mitre,src,dst,dst_port,tool" > "$OUT"
+# Her çalıştırma TEMİZ başlar (önceki koşunun pencereleriyle karışmasın!)
+echo "start_iso,end_iso,start_epoch,end_epoch,label,attack_type,mitre,src,dst,dst_port,tool" > "$OUT"
 have() { command -v "$1" >/dev/null 2>&1; }
 
 run_window() {
