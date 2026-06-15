@@ -59,8 +59,12 @@ pip install -q \
     scapy==2.6.1 \
     joblib==1.4.2 \
     xgboost==2.1.3 \
+    scikit-learn==1.5.2 \
     numpy==1.26.4 \
     websocket-client==1.8.0
+# NOT: scikit-learn ŞART — model joblib ile yüklenirken XGBClassifier sarmalayıcısı
+# ve RobustScaler sklearn'e ihtiyaç duyar. Eksikse XGBoost yüklenemez, sadece kural
+# katmanı çalışır.
 
 deactivate
 
