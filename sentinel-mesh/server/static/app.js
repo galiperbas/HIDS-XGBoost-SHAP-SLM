@@ -23,6 +23,23 @@
         SYN_Flood: 'T1498', DoS_Flood: 'T1498', DDoS_HTTP: 'T1498', Mirai_Botnet: 'T1498',
         BruteForce: 'T1110', Slowloris: 'T1499', ML_Detected: 'T1190',
     };
+    const MITRE_NAME = {
+        T1046: 'Network Service Discovery', T1498: 'Network Denial of Service',
+        T1110: 'Brute Force', T1499: 'Endpoint Denial of Service',
+        T1190: 'Exploit Public-Facing Application',
+    };
+    /* Saldırı türüne göre önerilen müdahale adımları (SOC playbook) */
+    const PLAYBOOK = {
+        PortScan: ['Kaynak IP\'yi gözlem listesine al / geçici engelle', 'Açık portları ve gereksiz servisleri gözden geçir', 'Güvenlik duvarı kurallarını sıkılaştır'],
+        SYN_Flood: ['SYN cookie\'leri etkinleştir', 'Kaynak IP\'yi rate-limit/engelle', 'Upstream DDoS korumasını uyar'],
+        DoS_Flood: ['Trafiği rate-limit et', 'Kaynak IP\'yi engelle', 'Bant genişliği/kaynak kullanımını izle'],
+        DDoS_HTTP: ['WAF / istek rate-limit uygula', 'Şüpheli IP bloklarını engelle'],
+        BruteForce: ['Hedef hesabı geçici kilitle', 'fail2ban/oran sınırı uygula', 'Güçlü parola + 2FA zorunlu kıl'],
+        Mirai_Botnet: ['IoT cihaz varsayılan parolalarını değiştir', 'Telnet (23) portunu kapat', 'Cihaz firmware\'ini güncelle'],
+        Slowloris: ['Bağlantı zaman aşımı/limitlerini ayarla', 'mod_reqtimeout / WAF kuralı uygula'],
+        Recon_Scan: ['Kaynak IP davranışını izle', 'Saldırı yüzeyini (açık servisler) azalt'],
+        ML_Detected: ['Akışı manuel incele', 'Kaynak IP\'yi gözlem listesine al', 'Benzer akışlarla korelasyon kur'],
+    };
 
     /* ─── STATE ─── */
     const state = {
@@ -54,6 +71,9 @@
         footerClock: $('#footer-clock'),
         liveIndicator: $('#feed-live-indicator'),
         btnReset: $('#btn-reset'),
+        eventModal: $('#event-modal'),
+        eventModalBody: $('#event-modal-body'),
+        eventModalClose: $('#event-modal-close'),
     };
 
     /* ═══════════════════════════════════════
@@ -274,6 +294,9 @@
                 <span class="feed-entry-time">${fmtTime(d.timestamp || d.server_time)}</span>
             </div>`;
 
+        entry.classList.add('clickable');
+        entry.addEventListener('click', () => openEventDetail(d));
+
         if (prepend) {
             dom.feedList.prepend(entry);
         } else {
@@ -293,6 +316,81 @@
         for (const log of logs) {
             addFeedEntry(log, false);
         }
+    }
+
+    /* ═══════════════════════════════════════
+       OLAY DETAY PANELİ (SHAP + MITRE + müdahale)
+       ═══════════════════════════════════════ */
+    function buildShapHtml(shap) {
+        if (!Array.isArray(shap) || !shap.length) return '';
+        const maxAbs = Math.max(...shap.map(s => Math.abs(Number(s.value) || 0)), 1e-9);
+        let rows = '';
+        for (const s of shap) {
+            const v = Number(s.value) || 0;
+            const pct = Math.max(Math.abs(v) / maxAbs * 100, 2);
+            const dir = v >= 0 ? 'shap-pos' : 'shap-neg';
+            rows += `
+                <div class="shap-row">
+                    <span class="shap-feat" title="${esc(s.feature)}">${esc(s.feature)}</span>
+                    <div class="shap-track"><div class="shap-fill ${dir}" style="width:${pct.toFixed(0)}%"></div></div>
+                    <span class="shap-val">${v >= 0 ? '+' : ''}${v.toFixed(3)}</span>
+                </div>`;
+        }
+        return `<div class="modal-section">
+                    <h4>Açıklanabilirlik — SHAP (kararı en çok etkileyen öznitelikler)</h4>
+                    <div class="shap-list">${rows}</div>
+                    <p class="shap-note">Kırmızı (+): saldırı olasılığını artıran · Yeşil (−): azaltan öznitelik.</p>
+                </div>`;
+    }
+
+    function openEventDetail(d) {
+        if (!dom.eventModal || !d) return;
+        const tClass = threatClass(d.threat_score);
+        const mitre = d.mitre || MITRE_MAP[d.attack_type] || '';
+        const mitreName = MITRE_NAME[mitre] || '';
+        const methodLabel = (d.method || '').toLowerCase() === 'xgboost' ? 'XGBoost (akış-bazlı ML)' : 'Kural tabanlı';
+
+        let whyHtml = buildShapHtml(d.shap_top);
+        if (!whyHtml && d.reason) {
+            whyHtml = `<div class="modal-section"><h4>Neden</h4><p>${esc(d.reason)}</p></div>`;
+        } else if (!whyHtml) {
+            whyHtml = `<div class="modal-section"><h4>Neden</h4><p>Bilinen saldırı imzası/kuralı eşleşti (${esc(d.attack_type || '-')}).</p></div>`;
+        }
+
+        const actions = PLAYBOOK[d.attack_type] || ['Olayı incele', 'Kaynak IP davranışını izle'];
+        const actionsHtml = actions.map(a => `<li>${esc(a)}</li>`).join('');
+
+        const conf = d.confidence != null ? `${(Number(d.confidence) * 100).toFixed(1)}%` : '—';
+        const inf = (d.inference_ms != null && Number(d.inference_ms) > 0) ? `${Number(d.inference_ms).toFixed(2)} ms` : '—';
+        const rows = [
+            ['Kaynak', esc(d.source_ip || '?')],
+            ['Hedef', esc(d.destination_ip || '?')],
+            ['Yöntem', methodLabel],
+            ['Tehdit skoru', `${Math.round(d.threat_score || 0)}/100 (${threatLabel(d.threat_score)})`],
+            ['Güven', conf],
+            ['Akış paketi', d.flow_packets != null ? d.flow_packets : '—'],
+            ['Çıkarım süresi', inf],
+            ['Zaman', esc(d.timestamp || d.server_time || d.ts_iso || '—')],
+        ].map(([k, v]) => `<div class="kv"><span class="kv-k">${k}</span><span class="kv-v">${v}</span></div>`).join('');
+
+        dom.eventModalBody.innerHTML = `
+            <div class="modal-head threat-${tClass}">
+                <h3 id="event-modal-title">${esc(d.attack_type || d.label || 'Olay')}</h3>
+                <span class="threat-badge threat-${tClass}">${threatLabel(d.threat_score)} ${Math.round(d.threat_score || 0)}</span>
+            </div>
+            ${mitre ? `<div class="modal-mitre">MITRE ATT&CK: <strong>${esc(mitre)}</strong>${mitreName ? ` — ${esc(mitreName)}` : ''}</div>` : ''}
+            <div class="modal-kv">${rows}</div>
+            ${whyHtml}
+            <div class="modal-section"><h4>Önerilen müdahale</h4><ul class="modal-actions">${actionsHtml}</ul></div>`;
+
+        dom.eventModal.classList.add('open');
+        dom.eventModal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeEventDetail() {
+        if (!dom.eventModal) return;
+        dom.eventModal.classList.remove('open');
+        dom.eventModal.setAttribute('aria-hidden', 'true');
     }
 
     /* ═══════════════════════════════════════
@@ -639,6 +737,14 @@
                 }
             });
         }
+
+        // Olay detay paneli kapatma (X, arka plan, Esc)
+        if (dom.eventModalClose) dom.eventModalClose.addEventListener('click', closeEventDetail);
+        if (dom.eventModal) {
+            const backdrop = dom.eventModal.querySelector('.event-modal-backdrop');
+            if (backdrop) backdrop.addEventListener('click', closeEventDetail);
+        }
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeEventDetail(); });
 
         // WebSocket connection
         connectWebSocket();
