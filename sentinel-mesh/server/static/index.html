@@ -208,6 +208,15 @@
     <!-- ══════════════ TOAST CONTAINER ══════════════ -->
     <div id="toast-container" class="toast-container" aria-live="assertive"></div>
 
+    <!-- ══════════════ OLAY DETAY PANELİ (modal) ══════════════ -->
+    <div id="event-modal" class="event-modal" aria-hidden="true">
+        <div class="event-modal-backdrop"></div>
+        <div class="event-modal-card" role="dialog" aria-modal="true" aria-labelledby="event-modal-title">
+            <button id="event-modal-close" class="event-modal-close" aria-label="Kapat">&times;</button>
+            <div id="event-modal-body"></div>
+        </div>
+    </div>
+
     <!-- ══════════════ GÜVENLİK ASİSTANI (CHATBOT) ══════════════ -->
     <button id="chat-fab" class="chat-fab" aria-label="Güvenlik Asistanını Aç" title="Güvenlik Asistanı">
         <svg class="chat-fab-open" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
