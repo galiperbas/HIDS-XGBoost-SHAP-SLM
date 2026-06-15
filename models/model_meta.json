@@ -1,12 +1,13 @@
 {
   "dataset": "CICIoT2023",
   "model": "XGBoost",
-  "n_features": 46,
+  "n_features": 40,
   "n_estimators": 150,
   "max_depth": 8,
-  "accuracy": 0.996465,
-  "f1_score": 0.9981877138792408,
-  "auc_roc": 0.9995641344450632,
-  "fpr": 0.025483117434699512,
-  "task": "binary (normal/attack)"
+  "accuracy": 0.996405,
+  "f1_score": 0.9981571521208129,
+  "auc_roc": 0.9995859651285356,
+  "fpr": 0.028741750053225462,
+  "task": "binary (normal/attack)",
+  "feature_policy": "live-computable subset (no fabricated composites)"
 }

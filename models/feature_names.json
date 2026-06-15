@@ -2,7 +2,6 @@
   "flow_duration",
   "Header_Length",
   "Protocol Type",
-  "Duration",
   "Rate",
   "Srate",
   "Drate",
@@ -37,12 +36,7 @@
   "Max",
   "AVG",
   "Std",
-  "Tot size",
   "IAT",
   "Number",
-  "Magnitue",
-  "Radius",
-  "Covariance",
-  "Variance",
-  "Weight"
+  "Variance"
 ]
