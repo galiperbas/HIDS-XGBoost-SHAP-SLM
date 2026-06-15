@@ -1,5 +1,5 @@
 """
-relay_server.py — Sentinel Mesh Bulut Relay Sunucusu.
+relay_server.py — HIDS Bulut Relay Sunucusu.
 
 Mimari:
   [Raspberry Pi HIDS] --push--> [BU SUNUCU] --broadcast--> [Flutter Mobil App]
@@ -35,9 +35,18 @@ try:
 except ImportError:
     generate_event = None
 
-app = FastAPI(title="Sentinel Mesh Relay")
+app = FastAPI(title="HIDS Relay")
 app.add_middleware(CORSMiddleware, allow_origins=["*"],
                    allow_methods=["*"], allow_headers=["*"])
+
+# Yazma uçlarını koruyan basit paylaşımlı anahtar (env'den).
+# Ayarlanmazsa (boş) eski davranış sürer; üretimde Render env'inde tanımlayın.
+INGEST_TOKEN = os.environ.get("INGEST_TOKEN", "")
+
+
+def _token_ok(provided: str) -> bool:
+    """Token tanımlı değilse herkese izin ver; tanımlıysa eşleşme şart."""
+    return (not INGEST_TOKEN) or (provided == INGEST_TOKEN)
 
 # Statik dosya servisi (web dashboard)
 STATIC_DIR = Path(__file__).parent / "static"
@@ -63,6 +72,11 @@ attack_distribution: dict[str, int] = {}
 DEMO_MODE = os.environ.get("DEMO_MODE", "true").lower() == "true"
 demo_event_id = 0
 
+
+def _is_demo() -> bool:
+    """Şu an gösterilen veri simüle mi? (DEMO açık ve gerçek sensör yokken)."""
+    return DEMO_MODE and sensor_count == 0
+
 # ── Gemini chatbot (ev kullanıcısı için güvenlik asistanı) ──
 # API anahtarı yalnızca sunucu tarafında env değişkeninde tutulur — tarayıcıya
 # ve koda ASLA gömülmez. Render → Environment → GEMINI_API_KEY olarak ayarlanır.
@@ -74,7 +88,7 @@ GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 GEMINI_FALLBACKS = ["gemini-2.5-flash", "gemini-3.5-flash", "gemini-flash-latest"]
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
-CHAT_SYSTEM = """Sen "Sentinel Mesh" ev ağı güvenlik asistanısın. Evdeki internet ağını \
+CHAT_SYSTEM = """Sen bir ev ağı güvenlik asistanısın. Evdeki internet ağını \
 koruyan bir cihazın (Raspberry Pi sensörü) tespit ettiği durumları, TEKNİK BİLGİSİ OLMAYAN \
 bir ev kullanıcısına sade, sakin ve güven veren bir dille TÜRKÇE açıklarsın.
 
@@ -165,7 +179,7 @@ async def root():
     # Fallback: JSON status
     uptime = int(time.time() - stats["server_start"])
     return {
-        "service": "Sentinel Mesh Relay",
+        "service": "HIDS Relay",
         "status": "online",
         "sensors_online": stats["sensors_online"],
         "mobile_clients": len(mobile_clients),
@@ -180,7 +194,7 @@ async def api_status():
     """JSON status (dashboard olmadan)."""
     uptime = int(time.time() - stats["server_start"])
     return {
-        "service": "Sentinel Mesh Relay",
+        "service": "HIDS Relay",
         "status": "online",
         "demo_mode": DEMO_MODE and sensor_count == 0,
         "sensors_online": stats["sensors_online"],
@@ -242,6 +256,7 @@ async def summary():
         "uptime_seconds": uptime,
         "attack_distribution": attack_distribution,
         "recent_logs": list(log_history)[:50],
+        "demo_mode": _is_demo(),
     }
 
 
@@ -351,8 +366,15 @@ async def ingest(ws: WebSocket):
     """
     Raspberry Pi HIDS sensörü buraya bağlanır ve log push eder.
     Pi outbound bağlantı açar — Pi'de açık port YOK (güvenli).
+
+    INGEST_TOKEN ayarlıysa, Pi URL'ine ?token=... eklemek zorunludur
+    (örn. wss://.../ingest?token=XYZ). Böylece yabancılar sahte olay enjekte edemez.
     """
     global sensor_count
+    if not _token_ok(ws.query_params.get("token", "")):
+        await ws.close(code=1008)  # policy violation
+        print("[INGEST] Reddedildi: geçersiz/eksik token.")
+        return
     await ws.accept()
     sensor_count += 1
     stats["sensors_online"] = sensor_count
@@ -362,6 +384,7 @@ async def ingest(ws: WebSocket):
     await broadcast_to_mobile({
         "type": "sensor_status",
         "online": sensor_count,
+        "demo_mode": _is_demo(),
     })
 
     try:
@@ -429,6 +452,7 @@ async def stream(ws: WebSocket):
             "stats": stats,
             "attack_distribution": attack_distribution,
             "recent_logs": list(log_history)[:50],
+            "demo_mode": _is_demo(),
         }))
         while True:
             await ws.receive_text()  # ping/keepalive

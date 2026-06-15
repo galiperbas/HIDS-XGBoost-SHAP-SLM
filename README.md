@@ -1,10 +1,12 @@
-# Uç Cihazlarda Çalışan, SHAP Açıklanabilirlik ve SLM Entegreli Saldırı Tespit Sistemi
+# Uç Cihazlarda Çalışan, SHAP Açıklanabilirlik ve Chatbot Entegreli Saldırı Tespit Sistemi
 
 ![Sistem Mimarisi: VMware üzerinde çalışan iki sanal sunucu (simülsayon ortamı), çevrimiçi gösterge paneli/monitörü (relay sunucu) ve uç cihaz/Raspberry Pi 4 bağlantısı](image-and-videos/image.jpg)
 
-Bu proje, uç (edge) veya sis (fog) bilişim ağlarındaki (Örn: IoT ortamları, Raspberry Pi istasyonları vb.) tehditleri anlık olarak algılayabilmek amacıyla, bulut bağımlılığı olmayan on-device (cihaz-üstü) bir Siber Saldırı Tespit Sistemi (IDS) prototipidir. 
+Bu proje, uç (edge) veya sis (fog) bilişim ağlarındaki (Örn: IoT ortamları, Raspberry Pi istasyonları vb.) tehditleri anlık olarak algılayabilmek amacıyla geliştirilen bir Siber Saldırı Tespit Sistemi (IDS) prototipidir. **Saldırı tespiti (XGBoost) uç cihaz üzerinde lokal çalışır**; teknik bilgisi olmayan kullanıcıya yönelik doğal dilde açıklama katmanı ise bulut tabanlı bir dil modeli (Google Gemini API) ile sağlanır.
 
-Sistem temel mimarisi: Siber saldırı sınıflandırmada yüksek başarıya sahip **XGBoost** algoritmasından, kararların şeffaf izlenebilirliği için oyun teorisine dayanan **SHAP (SHapley Additive exPlanations)** mimarisinden ve analiste teknik verileri doğal dilde açıklayabilen Küçük Dil Modeli (**SLM**, Phi-3-mini) entegrasyonundan oluşmaktadır.
+Sistem temel mimarisi: Siber saldırı sınıflandırmada yüksek başarıya sahip **XGBoost** algoritmasından, modelin karar gerekçelerini incelemek için oyun teorisine dayanan **SHAP (SHapley Additive exPlanations)** analizinden ve son kullanıcının ağ olaylarını sade dille sorgulayabildiği bir **chatbot** (bulut Gemini API) katmanından oluşmaktadır.
+
+> **Not (akademik dürüstlük):** Cihaz-üstü çalışan kısım yalnızca tespit motorudur (XGBoost + kural tabanlı). Chatbot ve doğal dil açıklamaları bulut servisine (Gemini) istek atar — yani sistem tümüyle "buluttan bağımsız" değildir. Cihaz-içi bir Küçük Dil Modeli (SLM) bu sürümde **yoktur**; gelecek çalışma olarak konumlandırılmıştır.
 
 ---
 
@@ -44,17 +46,17 @@ To validate the real-time detection capabilities of the proposed intrusion detec
 
 ## 🌟 Temel Özellikler (Features)
 
-* **Edge Cihaz Optimizasyonu:** Kurulan ML iterasyonu <5 MB seviyesinde sıkıştırılmıştır ve gelen sistem/ağ telemetrilerini cihaz üzerinde cihaz başı 10 ms (milisaniye) hızlarda derecelendirir.
-* **Yüksek Doğruluk Oranı:** Modern IoT tehditlerini barındıran veri tabanlarında, zafiyet/alarm kaçırma senaryolarını önlemek amacıyla **%98+ Doğruluk (Accuracy)** ve **%99+ Duyarlılık (Recall)** gibi oldukça başarılı oranlara imza atmıştır.
-* **Şeffaf Tehdit Teşhisi (Kara Kutu Çözümü):** Ağ saldırı uyarılarını "var" ya da "yok" şeklinde vermez. İçerdiriği SHAP Katmanı ile birlikte tahmini tetikleyen "Nedenleri" bulur ve "Örneğin: Bu saldırı, Port 4444 tabanlı bir ters bağlantıdır" şeklinde nedensel ağırlıkları ekrana basar.
-* **Dil Modeli Destekli Uyarı Sistemi (Natural Language Alerts):** Modülden dönen yoğun matematiksel SHAP sayılarını; Olay Müdahale Uzmanlarının (SOC/Incident Response) anlayıp anında aksiyon komutları (Playbook) yazabileceği özet doğal insan diline çevirir.
+* **Edge Cihaz Optimizasyonu:** Eğitilen XGBoost modeli ağaç sayısı ve derinliği sınırlanarak hafif tutulmuş (sıkıştırılmış joblib ~birkaç MB) ve Raspberry Pi 4 üzerinde çalışacak şekilde hedeflenmiştir. *(Pi üzerindeki gerçek çıkarım gecikmesi ölçülüp rapora eklenecektir.)*
+* **Benchmark Model Başarımı:** CICIoT2023 veri setinin **test kümesinde** **~%99.6 Doğruluk (Accuracy)** ve **%99+ F1** elde edilmiştir (bkz. `models/model_meta.json`). *Bu değerler veri setinin test kümesine aittir; canlı testbed üzerindeki sistem başarımı ayrıca ölçülmektedir.*
+* **Açıklanabilirlik (SHAP):** Eğitim aşamasında SHAP analizi ile modelin hangi özniteliklere ağırlık verdiği (küresel öznitelik önemi) beeswarm/bar grafikleriyle raporlanır. *(Her tespit için canlı, olay-bazlı SHAP açıklaması gelecek çalışmadır.)*
+* **Hibrit Tespit:** Anlık kural tabanlı katman (port tarama, SYN flood, DoS, brute-force) + akış-bazlı XGBoost katmanı birlikte çalışır.
+* **Sade Dilde Chatbot:** Dashboard üzerindeki chatbot, ağ olaylarını teknik olmayan kullanıcıya sade Türkçe ile açıklar (bulut Gemini API).
 
 ## 🚀 Öne Çıkan Başarımlar (Key Highlights)
 
-* **Veri Egemenliği/Gizliliği:** Güvenlik tespitleri esnasında buluta bağımlı kalınmaz, lokal çalışır. Veri sızıntısının önüne geçer.
-* **Alarm Yorgunluğu Çözümlemesi:** Yanlış alarmların (False Positive) sayısını minimize edecek stabil eğrilere (PR, ROC-AUC) sahiptir.
-* **Kesintisiz Veri Akışı (Data Pipeline):** IP tabanlı "ezbercilikleri" ve hedef bağımlılıklarını önleyen baştan aşağı izole edilmiş Veri Sızıntısı (Data Leakage) önleyici bir veri ön işleme filtresine sahiptir.
-* Model port-bazlı bilindik Metasploit tarzı zararlı davranış modellerini tanır ve yakalar.
+* **Lokal Tespit:** Saldırı tespiti (XGBoost + kurallar) uç cihaz üzerinde çalışır; ham ağ trafiği buluta gönderilmez. *(Yalnızca tespit edilen olay özetleri relay sunucuya iletilir; chatbot kullanılırsa bu özetler Gemini'ye gider.)*
+* **Veri Sızıntısı Önleyici Eğitim:** Ön işlemede train/test ayrımı ölçekleme ve SMOTE'tan **önce** yapılarak veri sızıntısı (data leakage) engellenir.
+* **Kural Katmanı:** Port tarama, SYN flood, genel flood ve SSH/FTP brute-force gibi gürültülü saldırı örüntülerini anlık yakalar.
 
 ## ⚙️ Nasıl Çalıştırılır? (How to Run)
 
@@ -64,4 +66,4 @@ Projenin defter yapısı bir Google Colab (Jupyter) ortamında anında baştan a
 2. `hids.ipynb` defterini (script'ini) çalışma diskinize bağlayın/aktarın.
 3. Çalışma süresince gerekli veri setlerini indirme işlemi Kaggle Hub vasıtasıyla kendi kendine yapılacaktır.
 4. Menü sekmelerinden `Runtime -> Run all` (Çalışma Zamanı -> Tümünü Çalıştır) butonuna basın. (İlk çalıştırmada ortalama döngü 2-3 dakika sürebilir).
-5. *(İsteğe Bağlı)* Defterin sonundaki doğal dil modelinin (Phi-3-mini) mock testten gerçeğine (canlı inference) geçişini sağlamak için **Colab T4 GPU** desteği sekmesini aktif edin ve hücre başındaki yorum satırlarını (slash-out) kaldırın.
+5. Eğitim çıktıları (`xgboost_ciciot2023.joblib`, `scaler.joblib`, `feature_names.json`, `model_meta.json`) `models/` klasörüne kopyalanır ve canlı sensör (`hids-sensor/`) bu modeli yükler.

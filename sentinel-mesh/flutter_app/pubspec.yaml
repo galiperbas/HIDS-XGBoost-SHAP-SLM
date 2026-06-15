@@ -1,5 +1,5 @@
-name: sentinel_app
-description: Sentinel Mesh - Mobil HIDS Dashboard
+name: hids_app
+description: HIDS - Mobil Dashboard
 publish_to: 'none'
 version: 1.0.0+1
 

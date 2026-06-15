@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Callable, Optional
 
-from scapy.all import sniff, IP, TCP, UDP, ICMP, Raw
+from scapy.all import sniff, IP, TCP, UDP, ICMP
 
 
 @dataclass
@@ -32,8 +32,9 @@ class FlowFeatures:
     packets_last_sec: int
     unique_ports_last_sec: int
     syn_count_last_sec: int
-    # Uygulama katmanı payload (HTTP/AI servis isteği — prompt injection tespiti için)
-    payload: str = ""
+    # CICIoT2023 öznitelikleriyle birebir hesap için ham değerler
+    ip_proto: int = 0       # IP protokol numarası (6=TCP, 17=UDP, 1=ICMP) — "Protocol Type"
+    header_length: int = 0  # bu paketin IP+L4 başlık uzunluğu (bayt)
 
     def to_dict(self) -> dict:
         return {
@@ -88,30 +89,29 @@ class LiveSniffer:
         flags = "-"
         is_syn = False
 
+        # IP başlık uzunluğu (ihl 32-bit word cinsinden) — varsayılan 20 bayt
+        ip_proto = int(ip.proto)
+        header_length = (int(ip.ihl) if ip.ihl else 5) * 4
+
         if pkt.haslayer(TCP):
             tcp = pkt[TCP]
             proto = "TCP"
             src_port, dst_port = tcp.sport, tcp.dport
             flags = str(tcp.flags)
             is_syn = "S" in flags and "A" not in flags
+            header_length += (int(tcp.dataofs) if tcp.dataofs else 5) * 4
         elif pkt.haslayer(UDP):
             proto = "UDP"
             src_port, dst_port = pkt[UDP].sport, pkt[UDP].dport
+            header_length += 8  # UDP başlığı sabit 8 bayt
         elif pkt.haslayer(ICMP):
             proto = "ICMP"
+            header_length += 8  # ICMP başlığı 8 bayt
 
         port_map = {80: "HTTP", 443: "HTTPS", 53: "DNS", 22: "SSH", 21: "FTP", 8080: "HTTP-ALT"}
         proto = port_map.get(dst_port, proto)
 
         pkts, uports, syns = self._window_stats(ip.src, dst_port, is_syn)
-
-        # Uygulama katmanı payload (varsa) — ilk 512 bayt yeterli
-        payload = ""
-        if pkt.haslayer(Raw):
-            try:
-                payload = bytes(pkt[Raw].load)[:512].decode("latin-1", "ignore")
-            except Exception:
-                payload = ""
 
         return FlowFeatures(
             timestamp=datetime.now().strftime("%H:%M:%S.%f")[:-3],
@@ -126,7 +126,8 @@ class LiveSniffer:
             packets_last_sec=pkts,
             unique_ports_last_sec=uports,
             syn_count_last_sec=syns,
-            payload=payload,
+            ip_proto=ip_proto,
+            header_length=header_length,
         )
 
     def start(self, callback: Callable[[FlowFeatures], None]):

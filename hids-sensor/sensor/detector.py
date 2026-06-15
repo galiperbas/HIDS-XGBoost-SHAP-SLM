@@ -17,10 +17,10 @@ from typing import Optional
 
 try:
     from .sniffer import FlowFeatures
-    from .flow_aggregator import FlowAggregator, FlowState
+    from .flow_aggregator import FlowAggregator, FlowState, FEATURE_NAMES
 except ImportError:
     from sniffer import FlowFeatures
-    from flow_aggregator import FlowAggregator, FlowState
+    from flow_aggregator import FlowAggregator, FlowState, FEATURE_NAMES
 
 
 @dataclass
@@ -59,16 +59,28 @@ class AnomalyDetector:
                 if os.path.exists(features_path):
                     with open(features_path) as f:
                         self.feature_names = json.load(f)
-                self.use_xgboost = True
-
-                # Flow aggregator'ı başlat — akış tamamlandığında _on_flow çağrılır
-                self.flow_aggregator = FlowAggregator(
-                    window_sec=3.0,
-                    on_flow=self._on_flow
-                )
-                n_feat = len(self.feature_names) if self.feature_names else "?"
-                print(f"[DETECTOR] XGBoost modeli yüklendi ({n_feat} öznitelik)")
-                print(f"[DETECTOR] Hibrit mod: kural tabanlı (anlık) + XGBoost (akış-bazlı)")
+                # Öznitelik sayısı tutarlılık kontrolü (train/serve skew koruması):
+                # Canlı çıkarıcı FEATURE_NAMES kadar öznitelik üretir. Model bundan
+                # farklı sayıda bekliyorsa (örn. eski 46 öznitelikli model), XGBoost'u
+                # devre dışı bırak ve kullanıcıyı yeniden eğitime yönlendir.
+                expected = len(FEATURE_NAMES)
+                model_n = getattr(self.model, "n_features_in_", None)
+                if model_n is not None and model_n != expected:
+                    print(f"[DETECTOR] UYARI: Model {model_n} öznitelik bekliyor ama canlı "
+                          f"çıkarıcı {expected} üretiyor. XGBoost devre dışı.")
+                    print(f"[DETECTOR] Çözüm: Colab defterini güncel öznitelik setiyle "
+                          f"yeniden çalıştırıp model dosyalarını değiştirin.")
+                    self.model = None
+                    self.use_xgboost = False
+                else:
+                    self.use_xgboost = True
+                    # Akış tamamlandığında _on_flow çağrılır
+                    self.flow_aggregator = FlowAggregator(
+                        window_sec=3.0,
+                        on_flow=self._on_flow
+                    )
+                    print(f"[DETECTOR] XGBoost modeli yüklendi ({expected} öznitelik)")
+                    print(f"[DETECTOR] Hibrit mod: kural tabanlı (anlık) + XGBoost (akış-bazlı)")
             except Exception as e:
                 print(f"[DETECTOR] Model yüklenemedi ({e}) — sadece kural tabanlı.")
         else:
@@ -141,33 +153,8 @@ class AnomalyDetector:
         except Exception as e:
             print(f"[XGBoost] Tahmin hatası: {e}")
 
-    # ── AI Agent Security imzaları (OWASP LLM Top 10) ──
-    # LLM01: Prompt Injection / Jailbreak  | LLM06: Hassas veri sızdırma
-    LLM_INJECTION_SIGS = (
-        "ignore previous", "ignore all previous", "disregard previous",
-        "disregard all", "forget your instructions", "system prompt",
-        "you are now", "act as", "developer mode", "jailbreak",
-        "do anything now", "dan mode", "reveal your", "print your instructions",
-        "</system>", "<|im_start|>", "bypass your", "override your",
-    )
-    LLM_EXFIL_SIGS = (
-        "api_key", "api-key", "secret_key", "begin private key",
-        "password=", "/etc/passwd", "credit card", "ssn",
-    )
-    AI_SERVICE_PORTS = (80, 8080, 8000, 5000, 3000, 11434)  # web + AI API portları
-
     def _rule_based(self, f: FlowFeatures) -> Optional[Detection]:
         """Katman 1: bilinen saldırı imzaları."""
-
-        # ── Katman 0: AI Agent Security — payload-bazlı (OWASP LLM Top 10) ──
-        if f.payload and f.dst_port in self.AI_SERVICE_PORTS:
-            low = f.payload.lower()
-            if any(sig in low for sig in self.LLM_INJECTION_SIGS):
-                print(f"[AI-SEC] LLM_PromptInjection {f.source_ip}→{f.destination_ip}:{f.dst_port}")
-                return Detection("ANOMALY", "LLM_PromptInjection", 92, 0.93, "rule", 0)
-            if any(sig in low for sig in self.LLM_EXFIL_SIGS):
-                print(f"[AI-SEC] LLM_DataExfil {f.source_ip}→{f.destination_ip}:{f.dst_port}")
-                return Detection("ANOMALY", "LLM_DataExfil", 88, 0.90, "rule", 0)
 
         # Port Scan
         if f.unique_ports_last_sec >= 15:

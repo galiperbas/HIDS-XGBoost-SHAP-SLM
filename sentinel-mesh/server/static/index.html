@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sentinel Mesh — HIDS Siber Güvenlik Kontrol Paneli</title>
-    <meta name="description" content="Sentinel Mesh: Gerçek zamanlı Host Tabanlı Saldırı Tespit Sistemi (HIDS) kontrol paneli. XGBoost ve SHAP ile güçlendirilmiş ağ güvenliği izleme.">
-    <meta name="author" content="Sentinel Mesh Project">
+    <title>HIDS Dashboard — Saldırı Tespit Kontrol Paneli</title>
+    <meta name="description" content="Gerçek zamanlı Host Tabanlı Saldırı Tespit Sistemi (HIDS) kontrol paneli. XGBoost ile ağ anomali tespiti izleme.">
+    <meta name="author" content="HIDS Project">
     <meta name="theme-color" content="#0a0e14">
 
     <!-- Open Graph -->
-    <meta property="og:title" content="Sentinel Mesh — HIDS Kontrol Paneli">
-    <meta property="og:description" content="Gerçek zamanlı siber güvenlik izleme ve anomali tespit paneli. XGBoost + SHAP destekli.">
+    <meta property="og:title" content="HIDS Dashboard — Kontrol Paneli">
+    <meta property="og:description" content="Gerçek zamanlı saldırı tespit ve anomali izleme paneli. XGBoost destekli.">
     <meta property="og:type" content="website">
     <meta property="og:locale" content="tr_TR">
 
@@ -42,12 +42,16 @@
                     </svg>
                 </div>
                 <div class="logo-text">
-                    <h1>SENTINEL <span class="logo-accent">MESH</span></h1>
+                    <h1>HIDS <span class="logo-accent">DASHBOARD</span></h1>
                     <span class="logo-subtitle">Host-Based Intrusion Detection System</span>
                 </div>
             </div>
 
             <div class="header-status">
+                <div id="mode-badge" class="mode-badge demo" title="Veri kaynağı: gerçek sensör (CANLI) ya da örnek veri (DEMO)">
+                    <span class="mode-dot" aria-hidden="true"></span>
+                    <span class="mode-text">DEMO</span>
+                </div>
                 <button id="btn-reset" class="reset-btn" title="Verileri ve İstatistikleri Sıfırla">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                         <path d="M23 4v6h-6M1 20v-6h6"></path>
@@ -254,9 +258,9 @@
     <!-- ══════════════ FOOTER ══════════════ -->
     <footer id="dashboard-footer" class="footer">
         <div class="footer-inner">
-            <span class="footer-brand">© 2026 Sentinel Mesh Project</span>
+            <span class="footer-brand">© 2026 HIDS Projesi</span>
             <span class="footer-divider" aria-hidden="true">|</span>
-            <span class="footer-tech">XGBoost · SHAP · SLM · Raspberry Pi</span>
+            <span class="footer-tech">XGBoost · SHAP · Raspberry Pi</span>
             <span class="footer-divider" aria-hidden="true">|</span>
             <span id="footer-clock" class="footer-clock"></span>
         </div>

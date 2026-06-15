@@ -16,5 +16,9 @@ services:
         sync: false
       - key: GEMINI_MODEL
         value: "gemini-2.5-flash"
+      # /ingest token — boş bırakılırsa kapalı (herkes push edebilir). Üretimde
+      # Render panelinden bir değer girin ve Pi relay URL'ine ?token=... ekleyin.
+      - key: INGEST_TOKEN
+        sync: false
     plan: free
     healthCheckPath: /api/health

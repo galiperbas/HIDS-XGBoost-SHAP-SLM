@@ -285,6 +285,41 @@ body::before {
     50% { opacity: 0.4; transform: scale(0.7); }
 }
 
+/* Veri kaynağı rozeti: CANLI (gerçek sensör) / DEMO (örnek veri) */
+.mode-badge {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.85rem;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    border: 1px solid;
+}
+.mode-badge .mode-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+}
+.mode-badge.live {
+    background: var(--success-dim);
+    border-color: rgba(64, 229, 108, 0.35);
+    color: var(--success);
+}
+.mode-badge.live .mode-dot {
+    animation: pulse-dot 2s ease-in-out infinite;
+    box-shadow: 0 0 8px var(--success);
+}
+.mode-badge.demo {
+    background: var(--warning-dim);
+    border-color: rgba(255, 183, 77, 0.4);
+    color: var(--warning);
+}
+
 /* Sensor badge */
 .sensor-badge {
     display: flex;

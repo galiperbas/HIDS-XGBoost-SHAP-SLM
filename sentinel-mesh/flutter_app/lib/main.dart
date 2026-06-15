@@ -1,10 +1,10 @@
-// main.dart — Sentinel Mesh Mobil Dashboard
+// main.dart — HIDS Mobil Dashboard
 //
 // Raspberry Pi HIDS'ten gelen canlı saldırı tespitlerini gösterir.
 // Bulut relay sunucusuna WebSocket ile bağlanır.
 //
 // Kurulum:
-//   flutter create sentinel_app
+//   flutter create hids_app
 //   pubspec.yaml'a ekle: web_socket_channel, fl_chart, intl
 //   bu dosyayı lib/main.dart yerine koy
 //   SERVER_URL'i kendi sunucu IP'nle değiştir
@@ -18,14 +18,14 @@ import 'package:fl_chart/fl_chart.dart';
 // ⚠️ Kendi bulut sunucu IP'nle değiştir
 const String SERVER_URL = "wss://hids-xgboost-shap-slm.onrender.com/stream";
 
-void main() => runApp(const SentinelApp());
+void main() => runApp(const HidsApp());
 
-class SentinelApp extends StatelessWidget {
-  const SentinelApp({super.key});
+class HidsApp extends StatelessWidget {
+  const HidsApp({super.key});
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Sentinel Mesh',
+      title: 'HIDS Dashboard',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: const Color(0xFF0A0E14),
@@ -150,7 +150,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           children: [
             const Icon(Icons.shield, color: Color(0xFF00E5FF), size: 22),
             const SizedBox(width: 8),
-            const Text('SENTINEL MESH',
+            const Text('HIDS DASHBOARD',
                 style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 2)),
             const Spacer(),
             Container(

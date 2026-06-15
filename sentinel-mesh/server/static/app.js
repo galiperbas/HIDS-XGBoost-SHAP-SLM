@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════
-   SENTINEL MESH — Real-time Dashboard Client
+   HIDS DASHBOARD — Real-time Client
    ═══════════════════════════════════════════════════════════════ */
 
 (function () {
@@ -34,6 +34,7 @@
     const dom = {
         connectionBadge: $('#connection-status'),
         statusText: $('#connection-status .status-text'),
+        modeBadge: $('#mode-badge'),
         sensorsOnline: $('#sensors-online-count'),
         kpiTotal: $('#kpi-total-value'),
         kpiAnomaly: $('#kpi-anomaly-value'),
@@ -131,6 +132,18 @@
         const count = Number(n) || 0;
         dom.sensorsOnline.textContent = count;
         state.stats.sensors_online = count;
+    }
+
+    /* Veri kaynağı rozeti: gerçek sensör (CANLI) mu, örnek veri (DEMO) mu */
+    function updateModeBadge(isDemo) {
+        if (!dom.modeBadge) return;
+        const demo = !!isDemo;
+        dom.modeBadge.className = 'mode-badge ' + (demo ? 'demo' : 'live');
+        const txt = dom.modeBadge.querySelector('.mode-text');
+        if (txt) txt.textContent = demo ? 'DEMO' : 'CANLI';
+        dom.modeBadge.title = demo
+            ? 'DEMO: örnek (simüle) veri gösteriliyor — gerçek sensör bağlı değil'
+            : 'CANLI: gerçek sensörden gelen veriler';
     }
 
     /* ═══════════════════════════════════════
@@ -329,19 +342,19 @@
         clearTimeout(state.countdownTimer);
 
         const url = buildWsUrl();
-        console.log('[Sentinel] WebSocket bağlanıyor:', url);
+        console.log('[Dashboard] WebSocket bağlanıyor:', url);
         setConnectionState('reconnecting', 'BAĞLANIYOR…');
 
         try {
             state.ws = new WebSocket(url);
         } catch (e) {
-            console.error('[Sentinel] WebSocket oluşturulamadı:', e);
+            console.error('[Dashboard] WebSocket oluşturulamadı:', e);
             scheduleReconnect();
             return;
         }
 
         state.ws.onopen = () => {
-            console.log('[Sentinel] WebSocket bağlandı');
+            console.log('[Dashboard] WebSocket bağlandı');
             state.reconnectAttempts = 0;
             setConnectionState('online');
             startPing();
@@ -352,14 +365,14 @@
         };
 
         state.ws.onclose = (evt) => {
-            console.log('[Sentinel] WebSocket kapandı:', evt.code, evt.reason);
+            console.log('[Dashboard] WebSocket kapandı:', evt.code, evt.reason);
             stopPing();
             setConnectionState('offline');
             scheduleReconnect();
         };
 
         state.ws.onerror = (err) => {
-            console.error('[Sentinel] WebSocket hatası:', err);
+            console.error('[Dashboard] WebSocket hatası:', err);
         };
     }
 
@@ -369,7 +382,7 @@
             CONFIG.RECONNECT_MAX
         );
         state.reconnectAttempts++;
-        console.log(`[Sentinel] ${delay}ms sonra yeniden denenecek (deneme ${state.reconnectAttempts})`);
+        console.log(`[Dashboard] ${delay}ms sonra yeniden denenecek (deneme ${state.reconnectAttempts})`);
 
         // Countdown display
         let remaining = Math.ceil(delay / 1000);
@@ -414,7 +427,7 @@
         try {
             msg = JSON.parse(raw);
         } catch (e) {
-            console.warn('[Sentinel] Geçersiz JSON:', raw);
+            console.warn('[Dashboard] Geçersiz JSON:', raw);
             return;
         }
 
@@ -435,6 +448,7 @@
 
             case 'sensor_status':
                 updateSensorStatus(msg.online);
+                if ('demo_mode' in msg) updateModeBadge(msg.demo_mode);
                 break;
 
             case 'alert':
@@ -446,18 +460,19 @@
                 break;
 
             default:
-                console.log('[Sentinel] Bilinmeyen mesaj tipi:', type, msg);
+                console.log('[Dashboard] Bilinmeyen mesaj tipi:', type, msg);
         }
     }
 
     function handleInit(msg) {
-        console.log('[Sentinel] Init alındı');
+        console.log('[Dashboard] Init alındı');
         if (msg.stats) updateKPIs(msg.stats);
         if (msg.attack_distribution) updateAttackDistribution(msg.attack_distribution);
         if (msg.recent_logs) loadRecentLogs(msg.recent_logs);
         if (msg.stats && msg.stats.sensors_online != null) {
             updateSensorStatus(msg.stats.sensors_online);
         }
+        if ('demo_mode' in msg) updateModeBadge(msg.demo_mode);
     }
 
     function handleEvent(msg) {
@@ -494,7 +509,7 @@
     }
 
     function handleReset(msg) {
-        console.log('[Sentinel] Sıfırlama dalgası alındı');
+        console.log('[Dashboard] Sıfırlama dalgası alındı');
         state.stats = { 
             total_events: 0, 
             anomaly_count: 0, 
@@ -531,9 +546,10 @@
             if (data.stats && data.stats.sensors_online != null) {
                 updateSensorStatus(data.stats.sensors_online);
             }
-            console.log('[Sentinel] HTTP özet yüklendi');
+            if ('demo_mode' in data) updateModeBadge(data.demo_mode);
+            console.log('[Dashboard] HTTP özet yüklendi');
         } catch (e) {
-            console.log('[Sentinel] HTTP özet alınamadı:', e.message);
+            console.log('[Dashboard] HTTP özet alınamadı:', e.message);
         }
     }
 
@@ -555,7 +571,7 @@
        INIT
        ═══════════════════════════════════════ */
     function init() {
-        console.log('[Sentinel] Dashboard başlatılıyor…');
+        console.log('[Dashboard] Dashboard başlatılıyor…');
 
         // Start clock
         updateClock();
@@ -571,10 +587,10 @@
                     try {
                         const res = await fetch('/api/reset', { method: 'POST' });
                         if (res.ok) {
-                            console.log('[Sentinel] Sıfırlama talebi başarıyla gönderildi');
+                            console.log('[Dashboard] Sıfırlama talebi başarıyla gönderildi');
                         }
                     } catch (e) {
-                        console.error('[Sentinel] Sıfırlama hatası:', e);
+                        console.error('[Dashboard] Sıfırlama hatası:', e);
                     }
                 }
             });

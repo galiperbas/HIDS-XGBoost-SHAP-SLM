@@ -1,42 +1,50 @@
 """
-flow_aggregator.py — Paketleri akışlara topla, CICIoT2023 özniteliklerini hesapla.
+flow_aggregator.py — Paketleri akışlara topla, öznitelik vektörü üret.
 
-Paket-bazlı sniffer çıktısını alır, (src_ip, dst_ip, dst_port) bazında
-gruplar ve belirli zaman penceresi dolunca 46 özniteliklik vektör üretir.
-Bu vektör doğrudan XGBoost modeline beslenir.
+Paket-bazlı sniffer çıktısını alır, (src_ip, dst_ip, servis portu) bazında
+gruplar ve zaman penceresi dolunca öznitelik vektörü üretir. Bu vektör doğrudan
+XGBoost modeline beslenir.
+
+AKADEMİK DÜRÜSTLÜK NOTU
+-----------------------
+CICIoT2023'ün 46 özniteliğinin TAMAMI canlı paketlerden sadık biçimde yeniden
+üretilemez. Bu yüzden burada YALNIZCA canlı ortamda standart, belirsizlik
+içermeyen tanımlarla hesaplanabilen öznitelikler tutulur (aşağıdaki FEATURE_NAMES,
+40 öznitelik). Tanımını veri setinin çıkarıcısıyla birebir eşleştiremediğimiz
+kompozit öznitelikler ("Magnitue", "Radius", "Covariance", "Weight", "Duration"
+(TTL), "Tot size") KASITLI OLARAK DIŞARIDA BIRAKILMIŞTIR — uydurma/yaklaşık
+değer üretilmez. Colab eğitim defteri de modeli AYNI 40 öznitelikle (aynı sırada)
+eğitir; böylece eğitim ile canlı çıkarım arasında öznitelik kayması (train/serve
+skew) ortadan kalkar.
 """
 
 import time
-import math
 import numpy as np
-from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Optional, List, Callable
+from typing import Optional, Callable
 
 try:
     from .sniffer import FlowFeatures
 except ImportError:
     from sniffer import FlowFeatures
 
-# CICIoT2023 öznitelik sırası (feature_names.json ile birebir)
+# Canlı ortamda sadık biçimde hesaplanabilen öznitelikler (feature_names.json ile
+# ve Colab eğitim defteriyle BİREBİR aynı isim ve sıra olmalıdır).
 FEATURE_NAMES = [
-    "flow_duration", "Header_Length", "Protocol Type", "Duration",
+    "flow_duration", "Header_Length", "Protocol Type",
     "Rate", "Srate", "Drate",
     "fin_flag_number", "syn_flag_number", "rst_flag_number",
     "psh_flag_number", "ack_flag_number", "ece_flag_number", "cwr_flag_number",
     "ack_count", "syn_count", "fin_count", "urg_count", "rst_count",
     "HTTP", "HTTPS", "DNS", "Telnet", "SMTP", "SSH", "IRC",
     "TCP", "UDP", "DHCP", "ARP", "ICMP", "IPv", "LLC",
-    "Tot sum", "Min", "Max", "AVG", "Std", "Tot size", "IAT",
-    "Number", "Magnitue", "Radius", "Covariance", "Variance", "Weight",
+    "Tot sum", "Min", "Max", "AVG", "Std", "IAT", "Number", "Variance",
 ]
 
-# Protokol -> flag haritası
-PROTO_MAP = {
-    "HTTP": "HTTP", "HTTPS": "HTTPS", "DNS": "DNS", "SSH": "SSH",
-    "FTP": "Telnet",  # FTP yakın kategori
-    "TCP": "TCP", "UDP": "UDP", "ICMP": "ICMP", "HTTP-ALT": "HTTP",
-    "OTHER": "IPv",
+# Bu portlarda görülen trafik ilgili protokol bayrağını (one-hot) 1 yapar.
+_PORT_PROTO = {
+    80: "HTTP", 8080: "HTTP", 443: "HTTPS", 53: "DNS", 22: "SSH",
+    23: "Telnet", 25: "SMTP", 6667: "IRC", 67: "DHCP", 68: "DHCP",
 }
 
 
@@ -47,7 +55,7 @@ class FlowState:
     last_time: float = 0.0
     packet_sizes: list = field(default_factory=list)
     timestamps: list = field(default_factory=list)
-    header_lengths: list = field(default_factory=list)
+    header_total: int = 0          # toplam başlık uzunluğu (bayt)
     # TCP flag sayaçları
     fin: int = 0
     syn: int = 0
@@ -57,23 +65,27 @@ class FlowState:
     ece: int = 0
     cwr: int = 0
     urg: int = 0
-    # Protokol
+    # Kimlik / protokol
+    ip_proto: int = 0
     protocol: str = "TCP"
-    src_ip: str = ""
+    src_ip: str = ""               # akışı BAŞLATAN taraf (yön referansı)
     dst_ip: str = ""
     dst_port: int = 0
     # Yön sayaçları
-    fwd_count: int = 0  # source -> dest
-    bwd_count: int = 0  # dest -> source
+    fwd_count: int = 0             # src_ip -> dst_ip
+    bwd_count: int = 0             # dst_ip -> src_ip
+    # Görülen protokoller (one-hot için)
+    protos_seen: set = field(default_factory=set)
 
 
 class FlowAggregator:
     """
-    Paketleri akışlara toplar, pencere dolunca 46 öznitelik vektörü üretir.
+    Paketleri akışlara toplar, pencere dolunca FEATURE_NAMES sırasında bir
+    öznitelik vektörü üretir.
 
     Args:
         window_sec: Akış pencere süresi (saniye)
-        on_flow: Akış tamamlandığında çağrılacak callback
+        on_flow: Akış tamamlandığında çağrılacak callback (vec, state)
     """
 
     def __init__(self, window_sec: float = 3.0, on_flow: Optional[Callable] = None):
@@ -102,6 +114,20 @@ class FlowAggregator:
         if 'C' in f: state.cwr += 1
         if 'U' in f: state.urg += 1
 
+    def _mark_protocols(self, f: FlowFeatures, state: FlowState):
+        """Bu paketten görülen protokolleri işaretle (one-hot için)."""
+        state.protos_seen.add("IPv")  # IP paketi
+        if f.ip_proto == 6:
+            state.protos_seen.add("TCP")
+        elif f.ip_proto == 17:
+            state.protos_seen.add("UDP")
+        elif f.ip_proto == 1:
+            state.protos_seen.add("ICMP")
+        for port in (f.dst_port, f.src_port):
+            name = _PORT_PROTO.get(port)
+            if name:
+                state.protos_seen.add(name)
+
     def add_packet(self, f: FlowFeatures):
         """Paketi ilgili akışa ekle."""
         now = time.time()
@@ -112,15 +138,23 @@ class FlowAggregator:
                 start_time=now, last_time=now,
                 src_ip=f.source_ip, dst_ip=f.destination_ip,
                 dst_port=f.dst_port, protocol=f.protocol,
+                ip_proto=f.ip_proto,
             )
 
         state = self._flows[key]
         state.last_time = now
         state.packet_sizes.append(f.packet_size)
         state.timestamps.append(now)
-        state.header_lengths.append(min(f.packet_size, 54))  # IP+TCP header ~54
-        state.fwd_count += 1
+        state.header_total += f.header_length
+
+        # Yön: paketin kaynağı akışı başlatan taraf mı?
+        if f.source_ip == state.src_ip:
+            state.fwd_count += 1
+        else:
+            state.bwd_count += 1
+
         self._parse_flags(f.tcp_flags, state)
+        self._mark_protocols(f, state)
 
         # Pencere kontrolü
         if now - state.start_time >= self.window_sec:
@@ -131,7 +165,7 @@ class FlowAggregator:
             self._cleanup(now)
 
     def _emit_flow(self, key: str):
-        """Akışı 46 özniteliğe dönüştür ve callback'e gönder."""
+        """Akışı öznitelik vektörüne dönüştür ve callback'e gönder."""
         state = self._flows.pop(key, None)
         if state is None or len(state.packet_sizes) < 2:
             return
@@ -149,104 +183,62 @@ class FlowAggregator:
             self._emit_flow(k)
 
     def _compute_features(self, s: FlowState) -> np.ndarray:
-        """FlowState'ten 46 boyutlu öznitelik vektörü hesapla."""
+        """FlowState'ten FEATURE_NAMES sırasında öznitelik vektörü hesapla."""
         sizes = np.array(s.packet_sizes, dtype=np.float64)
         times = np.array(s.timestamps, dtype=np.float64)
         n = len(sizes)
 
-        # Temel metrikler
         duration = max(s.last_time - s.start_time, 0.001)
         rate = n / duration
         srate = s.fwd_count / duration
-        drate = s.bwd_count / duration if s.bwd_count > 0 else 0
+        drate = s.bwd_count / duration
 
-        # Paket boyut istatistikleri
         tot_sum = float(sizes.sum())
         mn = float(sizes.min())
         mx = float(sizes.max())
         avg = float(sizes.mean())
         std = float(sizes.std()) if n > 1 else 0.0
+        variance = float(sizes.var()) if n > 1 else 0.0
+        iat = float(np.diff(times).mean()) if n > 1 else 0.0
 
-        # Inter-arrival time
-        if n > 1:
-            iats = np.diff(times)
-            iat = float(iats.mean())
-        else:
-            iat = 0.0
+        # *_flag_number = ilgili flag akışta hiç görüldü mü (0/1)
+        def seen(c: int) -> int:
+            return 1 if c > 0 else 0
 
-        # İstatistiksel öznitelikler
-        magnitude = float(np.sqrt(np.sum(sizes ** 2)))
-        radius = float(np.sqrt(std ** 2)) if std > 0 else 0.0
-        variance = float(np.var(sizes))
-        if n > 1 and iat > 0:
-            covariance = float(np.cov(sizes[:min(n, len(times))],
-                                       times[:min(n, len(sizes))])[0][1]) if n > 2 else 0.0
-        else:
-            covariance = 0.0
-        weight = n / duration if duration > 0 else 0
+        oh = {p: (1 if p in s.protos_seen else 0) for p in
+              ["HTTP", "HTTPS", "DNS", "Telnet", "SMTP", "SSH", "IRC",
+               "TCP", "UDP", "DHCP", "ARP", "ICMP", "IPv", "LLC"]}
 
-        # Protokol one-hot
-        proto = PROTO_MAP.get(s.protocol, "IPv")
-        proto_flags = {p: 0 for p in ["HTTP","HTTPS","DNS","Telnet","SMTP",
-                                       "SSH","IRC","TCP","UDP","DHCP","ARP",
-                                       "ICMP","IPv","LLC"]}
-        if proto in proto_flags:
-            proto_flags[proto] = 1
-        # TCP/UDP base protokol de işaretle
-        if s.protocol in ("HTTP", "HTTPS", "SSH", "FTP", "DNS", "HTTP-ALT"):
-            proto_flags["TCP"] = 1
-
-        # Header length toplamı
-        header_len = sum(s.header_lengths)
-
-        # 46 öznitelik vektörü (FEATURE_NAMES sırasıyla)
         vec = np.array([
-            duration,           # flow_duration
-            header_len,         # Header_Length
-            hash(s.protocol) % 20,  # Protocol Type (sayısal)
-            duration,           # Duration
-            rate,               # Rate
-            srate,              # Srate
-            drate,              # Drate
-            s.fin,              # fin_flag_number
-            s.syn,              # syn_flag_number
-            s.rst,              # rst_flag_number
-            s.psh,              # psh_flag_number
-            s.ack,              # ack_flag_number
-            s.ece,              # ece_flag_number
-            s.cwr,              # cwr_flag_number
-            s.ack,              # ack_count
-            s.syn,              # syn_count
-            s.fin,              # fin_count
-            s.urg,              # urg_count
-            s.rst,              # rst_count
-            proto_flags["HTTP"],
-            proto_flags["HTTPS"],
-            proto_flags["DNS"],
-            proto_flags["Telnet"],
-            proto_flags["SMTP"],
-            proto_flags["SSH"],
-            proto_flags["IRC"],
-            proto_flags["TCP"],
-            proto_flags["UDP"],
-            proto_flags["DHCP"],
-            proto_flags["ARP"],
-            proto_flags["ICMP"],
-            proto_flags["IPv"],
-            proto_flags["LLC"],
-            tot_sum,            # Tot sum
-            mn,                 # Min
-            mx,                 # Max
-            avg,                # AVG
-            std,                # Std
-            tot_sum,            # Tot size
-            iat,                # IAT
-            n,                  # Number
-            magnitude,          # Magnitue (dataset'teki typo)
-            radius,             # Radius
-            covariance,         # Covariance
-            variance,           # Variance
-            weight,             # Weight
+            duration,            # flow_duration
+            float(s.header_total),  # Header_Length
+            float(s.ip_proto),   # Protocol Type (gerçek IP protokol numarası)
+            rate,                # Rate
+            srate,               # Srate
+            drate,               # Drate
+            seen(s.fin),         # fin_flag_number
+            seen(s.syn),         # syn_flag_number
+            seen(s.rst),         # rst_flag_number
+            seen(s.psh),         # psh_flag_number
+            seen(s.ack),         # ack_flag_number
+            seen(s.ece),         # ece_flag_number
+            seen(s.cwr),         # cwr_flag_number
+            s.ack,               # ack_count
+            s.syn,               # syn_count
+            s.fin,               # fin_count
+            s.urg,               # urg_count
+            s.rst,               # rst_count
+            oh["HTTP"], oh["HTTPS"], oh["DNS"], oh["Telnet"], oh["SMTP"],
+            oh["SSH"], oh["IRC"], oh["TCP"], oh["UDP"], oh["DHCP"],
+            oh["ARP"], oh["ICMP"], oh["IPv"], oh["LLC"],
+            tot_sum,             # Tot sum
+            mn,                  # Min
+            mx,                  # Max
+            avg,                 # AVG
+            std,                 # Std
+            iat,                 # IAT
+            float(n),            # Number
+            variance,            # Variance
         ], dtype=np.float64)
 
         return vec

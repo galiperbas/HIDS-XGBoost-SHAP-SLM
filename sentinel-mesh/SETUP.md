@@ -1,4 +1,4 @@
-# Sentinel Mesh — Kurulum ve Çalıştırma Rehberi
+# HIDS — Kurulum ve Çalıştırma Rehberi
 
 Üç parçalı dağıtık mimari: Pi (sensör) → Bulut sunucu (relay) → Mobil app (dashboard).
 
@@ -67,8 +67,8 @@ Artık Pi her tespiti hem yerel dashboard'a hem buluta gönderir.
 ## 3. Flutter Mobil App
 
 ```bash
-flutter create sentinel_app
-cd sentinel_app
+flutter create hids_app
+cd hids_app
 # pubspec.yaml'ı bu repodakiyle değiştir
 # lib/main.dart'ı bu repodakiyle değiştir
 flutter pub get
