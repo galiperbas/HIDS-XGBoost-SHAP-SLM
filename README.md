@@ -32,19 +32,8 @@ Tespit, uç cihazda lokal çalışır (XGBoost + kural tabanlı). Her tespitte S
 Bilgi teknolojilerinin hızlı büyümesiyle karmaşık sistemlerin güvenliği giderek kritikleşmekte, saldırı tespit sistemleri (IDS) modern savunmanın temel bir bileşeni hâline gelmektedir. Ancak güvenlik zincirinin en zayıf halkası insandır: internet kullanıcılarının önemli bir kısmı siber tehditler konusunda yeterli farkındalığa ve kendi cihazlarını koruyacak teknik bilgiye sahip değildir. Bu kullanıcılar teknolojiyle teknik operatör olarak değil son kullanıcı (end-consumer) olarak etkileştiğinden, gelişmiş tehditlere karşı korumasız kalmaktadır. Bu proje, teknik bilgisi olmayan kullanıcıların kolayca benimseyebileceği; Raspberry Pi üzerinde çalışan, SHAP tabanlı açıklanabilir yapay zekâ ve etkileşimli bir chatbot ile desteklenmiş hafif bir IDS çerçevesi sunarak bu boşluğu hedefler.
 
 ### Mimari
-```
-[Saldırgan VM] ─┐  (Pi, ARP-MITM ile araya inline girer)
-                ├─► [Raspberry Pi 4: Sniffer → Kural + XGBoost + canlı SHAP]
-[Kurban VM]   ─┘                 │  └─ logs/detections.jsonl (kalıcı, MITRE etiketli)
-                                 ▼
-                       [Bulut Relay (Render, FastAPI/WebSocket)]
-                                 │
-              ┌──────────────────┼───────────────────────┐
-              ▼                  ▼                         ▼
-     [Web Dashboard]      [Telegram bildirimi]    [Gemini chatbot]
-   canlı akış + KPI +      kritik saldırıda         sade-dil soru/cevap
-   olay-detay + SHAP        anlık mobil push
-```
+
+![Sistem Mimarisi](image-and-videos/mimari-tr.svg)
 Test ortamı: Windows 11 host üzerinde VMware Workstation Pro, iki Ubuntu Server sanal makinesi (saldırgan ve kurban, bridged). Model eğitimi Google Colab (T4 GPU), canlı çıkarım Raspberry Pi 4 (8GB, CPU) üzerinde.
 
 ### Özellikler
