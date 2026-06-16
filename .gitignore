@@ -15,11 +15,12 @@ __pycache__/
 venv/
 env/
 
-# ── İşletim sistemi / editör ──
+# ── İşletim sistemi / editör / araçlar ──
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/
+.claude/
 
 # ── Loglar ──
 *.log
