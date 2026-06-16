@@ -1,4 +1,4 @@
-<h1 align="center">Intrusion Detection System on Raspberry with SHAP and Chatbot Integration for End-Consumers</h1>
+<h1 align="center">Intrusion Detection System on Raspberry Pi with SHAP and Chatbot Integration for End-Consumers</h1>
 
 <p align="center">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white">
