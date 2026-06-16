@@ -1,69 +1,171 @@
-# Uç Cihazlarda Çalışan, SHAP Açıklanabilirlik ve Chatbot Entegreli Saldırı Tespit Sistemi
+<h1 align="center">🛡️ Edge HIDS — Explainable Intrusion Detection on Raspberry Pi</h1>
+<p align="center">
+  <b>Raspberry Pi üzerinde, XGBoost + SHAP açıklanabilirliği ve sade-dil chatbot ile saldırı tespit sistemi</b><br/>
+  <i>An explainable, edge-deployed Host-based Intrusion Detection System (HIDS) for non-technical end-users</i>
+</p>
 
-![Sistem Mimarisi: VMware üzerinde çalışan iki sanal sunucu (simülsayon ortamı), çevrimiçi gösterge paneli/monitörü (relay sunucu) ve uç cihaz/Raspberry Pi 4 bağlantısı](image-and-videos/image.jpg)
+<p align="center">
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white">
+  <img alt="XGBoost" src="https://img.shields.io/badge/XGBoost-2.1-FF6600">
+  <img alt="scikit-learn" src="https://img.shields.io/badge/scikit--learn-1.6-F7931E?logo=scikitlearn&logoColor=white">
+  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white">
+  <img alt="Raspberry Pi" src="https://img.shields.io/badge/Raspberry%20Pi%204-A22846?logo=raspberrypi&logoColor=white">
+  <img alt="SHAP" src="https://img.shields.io/badge/Explainability-SHAP-4B0082">
+  <img alt="MITRE" src="https://img.shields.io/badge/MITRE-ATT%26CK-C7233F">
+</p>
 
-Bu proje, uç (edge) veya sis (fog) bilişim ağlarındaki (Örn: IoT ortamları, Raspberry Pi istasyonları vb.) tehditleri anlık olarak algılayabilmek amacıyla geliştirilen bir Siber Saldırı Tespit Sistemi (IDS) prototipidir. **Saldırı tespiti (XGBoost) uç cihaz üzerinde lokal çalışır**; teknik bilgisi olmayan kullanıcıya yönelik doğal dilde açıklama katmanı ise bulut tabanlı bir dil modeli (Google Gemini API) ile sağlanır.
+<p align="center">
+  🌐 <b>Canlı Dashboard / Live Dashboard:</b> <a href="https://hids-xgboost-shap-slm.onrender.com">hids-xgboost-shap-slm.onrender.com</a><br/>
+  <sub>(Gerçek sensör bağlı değilken örnek/DEMO veri gösterir · shows sample/DEMO data when no sensor is connected)</sub>
+</p>
 
-Sistem temel mimarisi: Siber saldırı sınıflandırmada yüksek başarıya sahip **XGBoost** algoritmasından, modelin karar gerekçelerini incelemek için oyun teorisine dayanan **SHAP (SHapley Additive exPlanations)** analizinden ve son kullanıcının ağ olaylarını sade dille sorgulayabildiği bir **chatbot** (bulut Gemini API) katmanından oluşmaktadır.
+<p align="center"><b><a href="#-türkçe">🇹🇷 Türkçe</a> &nbsp;|&nbsp; <a href="#-english">🇬🇧 English</a></b></p>
 
-> **Not (akademik dürüstlük):** Cihaz-üstü çalışan kısım yalnızca tespit motorudur (XGBoost + kural tabanlı). Chatbot ve doğal dil açıklamaları bulut servisine (Gemini) istek atar — yani sistem tümüyle "buluttan bağımsız" değildir. Cihaz-içi bir Küçük Dil Modeli (SLM) bu sürümde **yoktur**; gelecek çalışma olarak konumlandırılmıştır.
+![Sistem Mimarisi / System Architecture](image-and-videos/image.jpg)
 
----
-
-## 🏗️ Sistem Mimarisi (Turkish)
-
-Geliştirilen siber saldırı tespit sisteminin canlı test (Proof of Concept) süreçlerinin doğrulanması amacıyla sanal ve fiziksel bileşenlerin entegre edildiği hibrit bir test yatağı (testbed) ortamı kurulmuştur. Sistem bileşenlerinin topolojik dağılımı şu şekildedir:
-
-* **Simülasyon ve Konak Donanım Altyapısı:** Ana konak (Host) bilgisayar olarak Windows 11 (16 GB RAM, NVIDIA GTX 1650) donanımı kullanılmış ve tip hypervisor olarak **VMware Workstation Pro 26H1** sanallaştırma katmanı konumlandırılmıştır.
-* **Sanal Düğümler (Sanal Sunucular):** İzole simülasyon ortamında iki adet **Ubuntu Server 26.04 LTS** işletim sistemi ayağa kaldırılmıştır:
-  * `SimVM-Normal`: Ağ üzerinde olağan trafik üretimi sağlamak amacıyla bünyesinde HTTP ve FTP gibi temel ağ servislerini barındıran kurban/hedef makine.
-  * `SimVM-Attacker`: Hedef makineye siber saldırı vektörleri fırlatmakla görevli saldırgan makine.
-* **Ağ Konfigürasyonu:** Sanal makinelerin ağ adaptörleri fiziksel ağ durumunu kopyalayacak şekilde **"Bridged Mode (with replicated physical network connection state)"** olarak yapılandırılmıştır. Düğümler dinamik olarak `192.168.137.X` DHCP alt ağ aralığından IP adresi almaktadır.
-* **Donanım Entegrasyonu ve Canlı Çıkarım (Inference):** Saldırgan (`SimVM-Attacker`) ile hedef (`SimVM-Normal`) makineler arasındaki ağ hattına RJ45 Ethernet arayüzü üzerinden satır içi (**inline**) olarak fiziksel bir **Raspberry Pi 4 (8GB)** donanımı entegre edilmiştir. Bu uç cihaz üzerinde, Google Colab (T4 GPU) ortamında **CICIoT2023** veri setiyle eğitilmiş ve optimize edilmiş hafifletilmiş makine öğrenmesi modeli canlı ağ paketlerini dinleyerek anlık anomali tespiti gerçekleştirmektedir.
-* **Merkezi Bildirim ve Bulut Dağıtımı:** Raspberry Pi 4 donanımı hat üzerinde herhangi bir anomali veya saldırı izi yakaladığı anda, yerel kaynakları yormamak adına veriyi harici bir **HTTP POST** webhook isteği (JSON payload) ile bulut tabanlı **Render** platformunda barındırılan web backend sunucusuna iletir ve geliştirilen gösterge panelinde (UI) gerçek zamanlı olarak görselleştirir.
-
----
-
-## 🏗️ System Architecture (English)
-
-To validate the real-time detection capabilities of the proposed intrusion detection system, a hybrid testbed combining virtual and physical network components has been implemented. The architectural layout consists of the following components:
-
-* **Simulation & Host Infrastructure:** The core framework is deployed on a Windows 11 host (16 GB RAM, NVIDIA GTX 1650) utilizing **VMware Workstation Pro 26H1** as the primary type-2 hypervisor layer.
-* **Virtual Nodes (Target & Attacker):** Two distinct **Ubuntu Server 26.04 LTS** virtual instances are configured within the isolated sandbox environment:
-  * `SimVM-Normal`: The victim/target node running essential network services such as HTTP and FTP to generate baseline operational traffic.
-  * `SimVM-Attacker`: The dedicated malicious node utilized to execute simulated cyber attack vectors against the target server.
-* **Networking Environment:** The virtual network adapters are configured in **"Bridged Mode (with replicated physical network connection state)"** to seamlessly map onto the physical layer. The servers dynamically lease IP addresses within the `192.168.137.X` DHCP subnet range.
-* **Hardware Integration & Inline Inference:** A physical **Raspberry Pi 4 (8GB)** hardware appliance is integrated **inline** between the attacker and target network streams via an RJ45 Ethernet interface. This edge device runs the lightweight anomaly detection model—previously trained on Google Colab (T4 GPU) using the **CICIoT2023** dataset—to perform real-time packet sniffing and zero-latency stream classification.
-* **Central Alerting & Cloud Deployment:** Upon detecting an anomaly or exploit pattern, the Raspberry Pi 4 issues an asynchronous **HTTP POST** webhook request containing the transaction payload to a centralized web backend deployed on the **Render** cloud platform, reflecting the threat mitigation metrics onto a web user interface.
+> **Author / Yazar:** Galip Talha ERBAŞ · **Mentor / Danışman:** Dr. Enis KARAARSLAN
+> · Muğla Sıtkı Koçman Üniversitesi, Bilgisayar Mühendisliği · BSc Thesis / Lisans Bitirme Projesi
 
 ---
 
-## 🏗️ Proje İş Paketleri (Project Work Packages)
+# 🇹🇷 Türkçe
 
-Önerilen projenin yöntem mimarisi; “Veri Ön İşleme”, “XGBoost Model Eğitimi”, “SHAP Entegrasyonu ve Testleri”, “Yerel SLM Entegrasyonu” ve “Canlı Sistem Testleri ve Final Sürecine Hazırlık” olmak üzere beş iş paketinden oluşmaktadır. İlk 4 iş paketi, Şekil 1’de diyagrama karşılık gelmektedir. 5. iş paketi ise, bu mimarinin gerçek donanım kaynaklarına taşınması ve ürünleşmesi sürecini kapsamaktadır.
+## 📌 Genel Bakış
+Bu proje, ev/IoT ağlarındaki tehditleri **uç cihaz (Raspberry Pi 4) üzerinde, yerel olarak** algılayan açıklanabilir bir Host-Tabanlı Saldırı Tespit Sistemi (HIDS) prototipidir. Kurumsal IDS çözümlerinin gücünü, **teknik bilgisi olmayan ev kullanıcısının** ethernet'e takıp anlayabileceği bir cihaza indirger.
 
-![Şekil 1: Proje Mimarisi Diyagramı](2242.jpg)
+- **Tespit** uç cihazda lokal çalışır (XGBoost + kural tabanlı).
+- **Açıklanabilirlik** her tespitte canlı **SHAP** ile sağlanır (hangi öznitelik kararı ne kadar etkiledi).
+- **Sade-dil chatbot** ağ olaylarını teknik olmayan kullanıcıya anlatır (bulut Google Gemini API).
+- **Mobil bildirim** kritik saldırıda anında Telegram'a düşer.
 
-## 🌟 Temel Özellikler (Features)
+> **Akademik dürüstlük notu:** Cihaz-üstü çalışan kısım tespit motorudur. Chatbot ve doğal-dil açıklamaları **bulut** servisine (Gemini) istek atar; sistem tümüyle buluttan bağımsız değildir. Cihaz-içi bir Küçük Dil Modeli (SLM) bu sürümde **yoktur** — gelecek çalışmadır (repo adındaki "SLM" başlangıçtaki kapsamdan gelir).
 
-* **Edge Cihaz Optimizasyonu:** Eğitilen XGBoost modeli ağaç sayısı ve derinliği sınırlanarak hafif tutulmuş (sıkıştırılmış joblib ~birkaç MB) ve Raspberry Pi 4 üzerinde çalışacak şekilde hedeflenmiştir. *(Pi üzerindeki gerçek çıkarım gecikmesi ölçülüp rapora eklenecektir.)*
-* **Benchmark Model Başarımı:** CICIoT2023 veri setinin **test kümesinde** **~%99.6 Doğruluk (Accuracy)** ve **%99+ F1** elde edilmiştir (bkz. `models/model_meta.json`). *Bu değerler veri setinin test kümesine aittir; canlı testbed üzerindeki sistem başarımı ayrıca ölçülmektedir.*
-* **Açıklanabilirlik (SHAP):** Eğitim aşamasında SHAP analizi ile modelin hangi özniteliklere ağırlık verdiği (küresel öznitelik önemi) beeswarm/bar grafikleriyle raporlanır. *(Her tespit için canlı, olay-bazlı SHAP açıklaması gelecek çalışmadır.)*
-* **Hibrit Tespit:** Anlık kural tabanlı katman (port tarama, SYN flood, DoS, brute-force) + akış-bazlı XGBoost katmanı birlikte çalışır.
-* **Sade Dilde Chatbot:** Dashboard üzerindeki chatbot, ağ olaylarını teknik olmayan kullanıcıya sade Türkçe ile açıklar (bulut Gemini API).
+## 🏗️ Mimari
+```
+[Saldırgan VM] ─┐  (Pi, ARP-MITM ile araya inline girer)
+                ├─► [Raspberry Pi 4: Sniffer → Kural + XGBoost + canlı SHAP]
+[Kurban VM]   ─┘                 │  └─ logs/detections.jsonl (kalıcı, MITRE etiketli)
+                                 ▼
+                       [Bulut Relay (Render, FastAPI/WebSocket)]
+                                 │
+              ┌──────────────────┼───────────────────────┐
+              ▼                  ▼                         ▼
+     [Web Dashboard]      [Telegram bildirimi]    [Gemini chatbot]
+   canlı akış + KPI +      kritik saldırıda         sade-dil soru/cevap
+   olay-detay + SHAP        anlık mobil push
+```
+**Testbed:** Windows 11 host + VMware Workstation Pro · 2× Ubuntu Server VM (saldırgan + kurban, bridged) · model eğitimi Google Colab (T4 GPU) · canlı çıkarım Raspberry Pi 4 (8GB, CPU).
 
-## 🚀 Öne Çıkan Başarımlar (Key Highlights)
+## 🌟 Özellikler
+- **Edge ML:** CICIoT2023 ile eğitilmiş XGBoost; Pi'de ölçülen çıkarım **~2.6–6.1 ms/akış** (ort. ~3.4 ms), model dosyası **~0.4 MB**.
+- **Hibrit tespit:** Anlık kural katmanı (port tarama, SYN/UDP/ICMP flood, brute-force) + akış-bazlı XGBoost (3 sn pencere).
+- **Canlı açıklanabilirlik (SHAP):** Her XGBoost tespitinde, XGBoost'un yerel `pred_contribs` (TreeSHAP) özelliğiyle kararı en çok etkileyen öznitelikler hesaplanır — ek `shap` kütüphanesi gerektirmez, **Pi-dostu**. Dashboard'da "Neden?" satırı ve detay panelinde bar grafiği olarak gösterilir.
+- **MITRE ATT&CK eşlemesi:** Her tespit ilgili teknik ile etiketlenir (T1046, T1498, T1110, T1499, T1190).
+- **Web dashboard:** Gerçek zamanlı (WebSocket) akış, KPI'lar, saldırı dağılımı, DEMO/CANLI rozeti, **olay-detay paneli** (SHAP barları + MITRE + önerilen müdahale), Gemini chatbot.
+- **Mobil bildirim:** Kritik saldırıda Telegram'a anlık push (flood-spam'i önleyen cooldown ile).
+- **Bilimsel değerlendirme:** `experiments/` ground-truth üreteci (`attack-runner.sh`) + zaman-pencereli eşleştirme defteri (`evaluate_live.ipynb`) → gerçek recall / false-positive / Pi gecikmesi.
 
-* **Lokal Tespit:** Saldırı tespiti (XGBoost + kurallar) uç cihaz üzerinde çalışır; ham ağ trafiği buluta gönderilmez. *(Yalnızca tespit edilen olay özetleri relay sunucuya iletilir; chatbot kullanılırsa bu özetler Gemini'ye gider.)*
-* **Veri Sızıntısı Önleyici Eğitim:** Ön işlemede train/test ayrımı ölçekleme ve SMOTE'tan **önce** yapılarak veri sızıntısı (data leakage) engellenir.
-* **Kural Katmanı:** Port tarama, SYN flood, genel flood ve SSH/FTP brute-force gibi gürültülü saldırı örüntülerini anlık yakalar.
+## 📊 Sonuçlar
+| Metrik | Değer | Kaynak |
+|--------|-------|--------|
+| Doğruluk (Accuracy) | **%99.64** | CICIoT2023 test kümesi |
+| F1 | **0.998** | CICIoT2023 test kümesi |
+| AUC-ROC | **0.9996** | CICIoT2023 test kümesi |
+| Öznitelik sayısı | **40** (canlı hesaplanabilir alt küme) | train/serve parite |
+| Pi çıkarım gecikmesi | **~3.4 ms/akış** | gerçek donanım ölçümü |
 
-## ⚙️ Nasıl Çalıştırılır? (How to Run)
+> Benchmark metrikleri veri setinin **test kümesine** aittir. Canlı testbed başarımı (`experiments/`) ayrıca, ground-truth ile eşleştirilerek ölçülür.
 
-Projenin defter yapısı bir Google Colab (Jupyter) ortamında anında baştan aşağı koşacak şekilde tasarlanmıştır:
+## ⚙️ Nasıl Çalıştırılır?
+1. **Model eğitimi (Colab):** `colab/CICIoT2023_XGBoost_Training.ipynb` → Runtime ▸ Run all. Çıktılar (`xgboost_ciciot2023.joblib`, `scaler.joblib`, `feature_names.json`, `model_meta.json`) `models/` altına gelir.
+2. **Pi'ye dağıt:** `bash hids-sensor/deploy-to-pi.sh <PI_IP> <KULLANICI>` (kod + model + scriptler).
+3. **Sensörü inline başlat:** Pi'de `sudo bash /opt/hids-sensor/mitm-run.sh <KURBAN_IP> <SALDIRGAN_IP>`.
+4. **Dashboard:** Canlı panel için Render servisi (yukarıdaki link) veya yerel relay.
+5. **Değerlendirme:** Saldırgan VM'de `experiments2/attack-runner.sh` → `evaluate_live.ipynb`. Ayrıntı: [`docs/DEMO-GUIDE.md`](docs/DEMO-GUIDE.md).
 
-1. Bir **Google Colab** oturumu başlatın. 
-2. `hids.ipynb` defterini (script'ini) çalışma diskinize bağlayın/aktarın.
-3. Çalışma süresince gerekli veri setlerini indirme işlemi Kaggle Hub vasıtasıyla kendi kendine yapılacaktır.
-4. Menü sekmelerinden `Runtime -> Run all` (Çalışma Zamanı -> Tümünü Çalıştır) butonuna basın. (İlk çalıştırmada ortalama döngü 2-3 dakika sürebilir).
-5. Eğitim çıktıları (`xgboost_ciciot2023.joblib`, `scaler.joblib`, `feature_names.json`, `model_meta.json`) `models/` klasörüne kopyalanır ve canlı sensör (`hids-sensor/`) bu modeli yükler.
+## ⚠️ Sınırlar & Gelecek Çalışma
+- **Simülasyon testbed'i:** Kontrollü VM ortamı; büyük ölçekli gerçek trafik değil.
+- **Bulut chatbot:** Doğal-dil katmanı Gemini'ye bağlıdır; cihaz-içi SLM gelecek çalışmadır.
+- **Kural katmanı yön/etiket gürültüsü:** Yüksek hızlı flood'da kurban cevapları kuralı yanıltabilir (backscatter); akış-bazlı XGBoost daha sağlamdır.
+- **İkili sınıflandırma:** Saldırı/normal; çok-sınıf (saldırı türü) sınıflandırma gelecek çalışmadır.
+- **Inline ARP-MITM** testbed konumlandırması içindir; üretimde pasif TAP/SPAN veya gerçek köprü tercih edilmelidir.
+
+---
+
+# 🇬🇧 English
+
+## 📌 Overview
+This project is an **explainable, edge-deployed Host-based Intrusion Detection System (HIDS)** that detects threats in home/IoT networks **locally on a Raspberry Pi 4**. It brings enterprise-grade detection down to a device a **non-technical end-user** can plug into their ethernet and understand.
+
+- **Detection** runs locally on the edge device (XGBoost + rule-based).
+- **Explainability** is provided per detection via live **SHAP** (which feature drove the decision, and how much).
+- A **plain-language chatbot** explains network events to non-technical users (cloud Google Gemini API).
+- **Mobile alerts** are pushed instantly to Telegram on critical attacks.
+
+> **Academic-honesty note:** The on-device part is the detection engine. The chatbot and natural-language explanations call a **cloud** service (Gemini); the system is not fully cloud-independent. There is **no** on-device Small Language Model (SLM) in this version — it is positioned as future work (the "SLM" in the repo name reflects the original scope).
+
+## 🏗️ Architecture
+```
+[Attacker VM] ─┐  (Pi sits inline via ARP-MITM)
+               ├─► [Raspberry Pi 4: Sniffer → Rules + XGBoost + live SHAP]
+[Victim VM]  ─┘                  │  └─ logs/detections.jsonl (persistent, MITRE-tagged)
+                                 ▼
+                       [Cloud Relay (Render, FastAPI/WebSocket)]
+                                 │
+              ┌──────────────────┼───────────────────────┐
+              ▼                  ▼                         ▼
+       [Web Dashboard]     [Telegram alert]         [Gemini chatbot]
+   live feed + KPIs +     instant mobile push       plain-language Q&A
+   event detail + SHAP     on critical attacks
+```
+**Testbed:** Windows 11 host + VMware Workstation Pro · 2× Ubuntu Server VMs (attacker + victim, bridged) · model trained on Google Colab (T4 GPU) · live inference on Raspberry Pi 4 (8GB, CPU).
+
+## 🌟 Features
+- **Edge ML:** XGBoost trained on CICIoT2023; measured inference on the Pi **~2.6–6.1 ms/flow** (avg ~3.4 ms), model file **~0.4 MB**.
+- **Hybrid detection:** Instant rule layer (port scan, SYN/UDP/ICMP flood, brute-force) + flow-based XGBoost (3 s window).
+- **Live explainability (SHAP):** For every XGBoost detection, top contributing features are computed via XGBoost's native `pred_contribs` (TreeSHAP) — **no heavy `shap` dependency, Pi-friendly**. Shown as a "Why?" line and bar chart in the event-detail panel.
+- **MITRE ATT&CK mapping:** Each detection is tagged with its technique (T1046, T1498, T1110, T1499, T1190).
+- **Web dashboard:** Real-time (WebSocket) feed, KPIs, attack distribution, DEMO/LIVE badge, **event-detail modal** (SHAP bars + MITRE + recommended actions), Gemini chatbot.
+- **Mobile alerts:** Instant Telegram push on critical attacks (with cooldown to avoid flood spam).
+- **Scientific evaluation:** `experiments/` ground-truth generator (`attack-runner.sh`) + time-window matching notebook (`evaluate_live.ipynb`) → real recall / false-positive / Pi latency.
+
+## 📊 Results
+| Metric | Value | Source |
+|--------|-------|--------|
+| Accuracy | **99.64%** | CICIoT2023 test set |
+| F1 | **0.998** | CICIoT2023 test set |
+| AUC-ROC | **0.9996** | CICIoT2023 test set |
+| Feature count | **40** (live-computable subset) | train/serve parity |
+| Pi inference latency | **~3.4 ms/flow** | real hardware measurement |
+
+> Benchmark metrics are on the dataset's **test set**. Live-testbed performance is measured separately in `experiments/` by matching detections against ground truth.
+
+## ⚙️ How to Run
+1. **Train (Colab):** `colab/CICIoT2023_XGBoost_Training.ipynb` → Runtime ▸ Run all. Artifacts (`xgboost_ciciot2023.joblib`, `scaler.joblib`, `feature_names.json`, `model_meta.json`) land in `models/`.
+2. **Deploy to Pi:** `bash hids-sensor/deploy-to-pi.sh <PI_IP> <USER>` (code + model + scripts).
+3. **Start the sensor inline:** on the Pi, `sudo bash /opt/hids-sensor/mitm-run.sh <VICTIM_IP> <ATTACKER_IP>`.
+4. **Dashboard:** the Render service (link above) or a local relay.
+5. **Evaluate:** on the attacker VM run `experiments2/attack-runner.sh`, then `evaluate_live.ipynb`. Details: [`docs/DEMO-GUIDE.md`](docs/DEMO-GUIDE.md).
+
+## ⚠️ Limitations & Future Work
+- **Simulation testbed:** controlled VM environment, not large-scale real traffic.
+- **Cloud chatbot:** the NL layer depends on Gemini; an on-device SLM is future work.
+- **Rule-layer direction/label noise:** under high-rate floods, victim responses can mislead rules (backscatter); flow-based XGBoost is more robust.
+- **Binary classification:** attack/normal; multi-class (attack family) is future work.
+- **Inline ARP-MITM** is for the testbed; production should use a passive TAP/SPAN or a true bridge.
+
+---
+
+## 📁 Repo Yapısı / Structure
+```
+hids-sensor/      Raspberry Pi sensörü (sniffer, flow agg., detector, app) + deploy/run scriptleri
+sentinel-mesh/    Bulut relay (FastAPI) + web dashboard (static) + Flutter mobil app iskeleti
+colab/            CICIoT2023 XGBoost eğitim defteri
+models/           Eğitilmiş model + scaler + feature_names + meta
+experiments/ , experiments2/   Ground-truth üreteci + canlı değerlendirme defteri
+docs/             Kurulum, ilerleme, risk ve DEMO rehberi
+project/          Fonksiyonel gereksinimler + araç/sürüm dökümü (toolkit.json)
+```
+
+## 📜 Lisans / License
+Bkz. / See [`LICENSE`](LICENSE).
