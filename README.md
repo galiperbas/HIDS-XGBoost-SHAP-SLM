@@ -33,7 +33,7 @@ Bilgi teknolojilerinin hızlı büyümesiyle karmaşık sistemlerin güvenliği 
 
 ### Mimari
 
-![Sistem Mimarisi](image-and-videos/mimari-tr.png)
+![Sistem Mimarisi](image-and-videos/mimari-tr.jpg)
 Test ortamı: Windows 11 host üzerinde VMware Workstation Pro, iki Ubuntu Server sanal makinesi (saldırgan ve kurban, bridged). Model eğitimi Google Colab (T4 GPU), canlı çıkarım Raspberry Pi 4 (8GB, CPU) üzerinde.
 
 ### Özellikler
