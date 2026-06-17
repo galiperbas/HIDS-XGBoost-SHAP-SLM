@@ -19,7 +19,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    <link rel="stylesheet" href="/static/style.css?v=5">
+    <link rel="stylesheet" href="/static/style.css?v=6">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
 </head>
 <body>
@@ -179,6 +179,83 @@
 
         </div>
 
+        <!-- ══════════════ RASPBERRY Pi SİSTEM DURUMU ══════════════ -->
+        <section id="system-metrics-section" class="panel system-panel" aria-label="Raspberry Pi Sistem Durumu">
+            <div class="panel-header">
+                <h2 class="panel-title">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" aria-hidden="true">
+                        <rect x="4" y="4" width="16" height="16" rx="2"/>
+                        <rect x="9" y="9" width="6" height="6"/>
+                        <line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/>
+                        <line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/>
+                        <line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/>
+                        <line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/>
+                    </svg>
+                    Raspberry Pi — Sistem Durumu
+                </h2>
+                <span id="metrics-host" class="metrics-host offline" title="Sensör cihazı (hostname)">Sensör bağlı değil</span>
+            </div>
+
+            <div class="metrics-body">
+                <div class="gauge-row">
+                    <div class="gauge-wrap">
+                        <div class="gauge" id="gauge-cpu" style="--val:0">
+                            <div class="gauge-hole">
+                                <span class="gauge-value" id="m-cpu">—</span>
+                                <span class="gauge-sub">%</span>
+                            </div>
+                        </div>
+                        <span class="gauge-label">CPU</span>
+                    </div>
+                    <div class="gauge-wrap">
+                        <div class="gauge" id="gauge-mem" style="--val:0">
+                            <div class="gauge-hole">
+                                <span class="gauge-value" id="m-mem">—</span>
+                                <span class="gauge-sub">%</span>
+                            </div>
+                        </div>
+                        <span class="gauge-label">Bellek (RAM)</span>
+                    </div>
+                    <div class="gauge-wrap">
+                        <div class="gauge" id="gauge-temp" style="--val:0">
+                            <div class="gauge-hole">
+                                <span class="gauge-value" id="m-temp">—</span>
+                                <span class="gauge-sub">°C</span>
+                            </div>
+                        </div>
+                        <span class="gauge-label">Sıcaklık</span>
+                    </div>
+                </div>
+
+                <div class="metric-tiles">
+                    <div class="metric-tile">
+                        <span class="metric-tile-label">RAM Kullanımı</span>
+                        <span class="metric-tile-value" id="tile-ram">—</span>
+                    </div>
+                    <div class="metric-tile">
+                        <span class="metric-tile-label">Disk</span>
+                        <span class="metric-tile-value" id="tile-disk">—</span>
+                    </div>
+                    <div class="metric-tile">
+                        <span class="metric-tile-label">Yük (1 dk)</span>
+                        <span class="metric-tile-value" id="tile-load1">—</span>
+                    </div>
+                    <div class="metric-tile">
+                        <span class="metric-tile-label">Çekirdek / Frekans</span>
+                        <span class="metric-tile-value" id="tile-cores">—</span>
+                    </div>
+                    <div class="metric-tile">
+                        <span class="metric-tile-label">Yük (5 / 15 dk)</span>
+                        <span class="metric-tile-value" id="tile-load515">—</span>
+                    </div>
+                    <div class="metric-tile">
+                        <span class="metric-tile-label">Çalışma Süresi</span>
+                        <span class="metric-tile-value" id="tile-uptime">—</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- LIVE FEED -->
         <section id="live-feed-section" class="panel feed-panel" aria-label="Canlı Tespit Akışı">
             <div class="panel-header">
@@ -275,6 +352,6 @@
         </div>
     </footer>
 
-    <script src="/static/app.js?v=5"></script>
+    <script src="/static/app.js?v=6"></script>
 </body>
 </html>

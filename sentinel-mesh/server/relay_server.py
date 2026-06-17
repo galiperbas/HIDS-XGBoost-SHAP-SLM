@@ -67,6 +67,8 @@ stats = {
 }
 # Saldırı türü dağılımı (dashboard grafiği için)
 attack_distribution: dict[str, int] = {}
+# Pi sistem metriklerinin son durumu (CPU/RAM/sıcaklık) — sensör push eder
+latest_metrics: dict = {}
 
 # Demo modu (Pi bağlı değilken yedek veri üretimi)
 DEMO_MODE = os.environ.get("DEMO_MODE", "true").lower() == "true"
@@ -291,8 +293,15 @@ async def summary():
         "uptime_seconds": uptime,
         "attack_distribution": attack_distribution,
         "recent_logs": list(log_history)[:50],
+        "metrics": latest_metrics,
         "demo_mode": _is_demo(),
     }
+
+
+@app.get("/api/metrics")
+async def api_metrics():
+    """Pi sistem metriklerinin son durumu (CPU/RAM/sıcaklık)."""
+    return {"metrics": latest_metrics}
 
 
 def _security_context() -> str:
@@ -432,6 +441,16 @@ async def ingest(ws: WebSocket):
             raw = await ws.receive_text()
             event = json.loads(raw)
 
+            # Sistem metrikleri (Pi CPU/RAM/sıcaklık) — tespit olayı DEĞİL.
+            # İstatistik/anomali saymadan doğrudan dashboard'a iletilir.
+            if event.get("type") == "metrics":
+                data = event.get("data") or {}
+                latest_metrics.clear()
+                latest_metrics.update(data)
+                latest_metrics["server_time"] = datetime.now().strftime("%H:%M:%S")
+                await broadcast_to_mobile({"type": "metrics", "data": latest_metrics})
+                continue
+
             # İstatistik güncelle
             stats["total_events"] += 1
             label = event.get("label", "NORMAL")
@@ -472,6 +491,10 @@ async def ingest(ws: WebSocket):
         sensor_count -= 1
         stats["sensors_online"] = sensor_count
         print(f"[INGEST] Sensör ayrıldı. Aktif sensör: {sensor_count}")
+        # Sensör gidince metrikler bayatlar → temizle, dashboard "bağlı değil" göstersin
+        if sensor_count <= 0:
+            latest_metrics.clear()
+            await broadcast_to_mobile({"type": "metrics", "data": {}})
         await broadcast_to_mobile({
             "type": "sensor_status",
             "online": sensor_count,
@@ -494,6 +517,7 @@ async def stream(ws: WebSocket):
             "stats": stats,
             "attack_distribution": attack_distribution,
             "recent_logs": list(log_history)[:50],
+            "metrics": latest_metrics,
             "demo_mode": _is_demo(),
         }))
         while True:

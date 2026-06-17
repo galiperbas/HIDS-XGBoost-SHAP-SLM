@@ -36,6 +36,12 @@ try:
 except ImportError:
     CloudPusher = None
 
+# Sistem metrikleri (Pi CPU/RAM/sıcaklık) — ek bağımlılık gerektirmez
+try:
+    from .sysmetrics import SysMetrics
+except ImportError:
+    from sysmetrics import SysMetrics
+
 # ── App ──
 app = FastAPI(title="HIDS Sensor API — Hybrid Detection")
 app.add_middleware(CORSMiddleware, allow_origins=["*"],
@@ -53,6 +59,10 @@ _win = {"inbound": 0, "outbound": 0, "time": ""}
 
 # models/ dizininden XGBoost modeli yükle (varsa)
 detector = AnomalyDetector(models_dir="models")
+
+# Pi sistem metrikleri toplayıcı (CPU/RAM/sıcaklık) + en son okunan değer
+sysmetrics = SysMetrics()
+latest_metrics: dict = {}
 
 # Bulut relay'e push (Pi bağlıysa)
 RELAY_URL = os.environ.get("RELAY_URL", "")
@@ -149,6 +159,7 @@ async def consumer_loop():
     global _win
     last_win = time.time()
     last_flow_check = time.time()
+    last_metrics = time.time()
 
     while True:
         processed = 0
@@ -224,6 +235,20 @@ async def consumer_loop():
                 "uptime_seconds": int(elapsed),
             }})
 
+        # Pi sistem metrikleri (CPU/RAM/sıcaklık) — her 3 saniyede bir.
+        # "metrics" zarfıyla gönderilir; relay bunu tespit olayından ayırır.
+        if now - last_metrics >= 3:
+            last_metrics = now
+            try:
+                m = sysmetrics.read()
+                latest_metrics.clear()
+                latest_metrics.update(m)
+                await broadcast({"type": "metrics", "data": m})
+                if pusher and pusher.connected:
+                    pusher.push({"type": "metrics", "data": m})
+            except Exception:
+                pass
+
         if processed == 0:
             await asyncio.sleep(0.05)
 
@@ -251,6 +276,12 @@ async def root():
 @app.get("/api/logs")
 async def get_logs():
     return {"logs": list(recent_logs)}
+
+
+@app.get("/api/metrics")
+async def get_metrics():
+    """Pi sistem metriklerinin son okunan değeri (CPU/RAM/sıcaklık)."""
+    return {"metrics": latest_metrics}
 
 
 @app.websocket("/ws")

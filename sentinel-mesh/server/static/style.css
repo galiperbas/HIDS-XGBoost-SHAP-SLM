@@ -703,6 +703,145 @@ body::before {
 }
 
 /* ═══════════════════════════════════════
+   RASPBERRY Pi SİSTEM METRİKLERİ
+   ═══════════════════════════════════════ */
+.metrics-host {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.25rem 0.65rem;
+    border-radius: 12px;
+    background: var(--success-dim);
+    color: var(--success);
+    border: 1px solid rgba(64, 229, 108, 0.3);
+    white-space: nowrap;
+}
+.metrics-host.offline {
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-tertiary);
+    border-color: var(--border-subtle);
+}
+
+.metrics-body {
+    padding: 1.5rem 1.25rem;
+}
+
+.gauge-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 2.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.gauge-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+/* Conic-gradient halka gösterge — --val (0-100) ve --gauge-col ile sürülür */
+.gauge {
+    --val: 0;
+    --gauge-col: var(--accent);
+    position: relative;
+    width: 132px;
+    height: 132px;
+    border-radius: 50%;
+    background:
+        conic-gradient(var(--gauge-col) calc(var(--val) * 1%),
+                       rgba(255, 255, 255, 0.05) 0);
+    display: grid;
+    place-items: center;
+    transition: background 0.7s var(--ease-out);
+}
+.gauge::after {
+    /* yumuşak dış parıltı */
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    box-shadow: 0 0 18px -4px var(--gauge-col);
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.gauge-hole {
+    position: absolute;
+    inset: 13px;
+    border-radius: 50%;
+    background: var(--bg-card-solid);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    z-index: 1;
+}
+
+.gauge-value {
+    font-family: var(--font-mono);
+    font-size: 1.7rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--text-primary);
+}
+
+.gauge-sub {
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+}
+
+.gauge-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+/* Alt bilgi kutucukları (yük, disk, uptime...) */
+.metric-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.6rem;
+}
+
+.metric-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    padding: 0.7rem 0.9rem;
+    border-radius: var(--radius-xs);
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-subtle);
+    transition: border-color 0.3s var(--ease-out), background 0.3s var(--ease-out);
+}
+.metric-tile:hover {
+    background: var(--bg-hover);
+    border-color: var(--border);
+}
+
+.metric-tile-label {
+    font-size: 0.64rem;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+}
+
+.metric-tile-value {
+    font-family: var(--font-mono);
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* ═══════════════════════════════════════
    LIVE FEED
    ═══════════════════════════════════════ */
 .feed-panel {

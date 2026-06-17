@@ -74,6 +74,13 @@
         eventModal: $('#event-modal'),
         eventModalBody: $('#event-modal-body'),
         eventModalClose: $('#event-modal-close'),
+        // Pi sistem metrikleri
+        metricsHost: $('#metrics-host'),
+        gaugeCpu: $('#gauge-cpu'), mCpu: $('#m-cpu'),
+        gaugeMem: $('#gauge-mem'), mMem: $('#m-mem'),
+        gaugeTemp: $('#gauge-temp'), mTemp: $('#m-temp'),
+        tileRam: $('#tile-ram'), tileDisk: $('#tile-disk'), tileLoad1: $('#tile-load1'),
+        tileCores: $('#tile-cores'), tileLoad515: $('#tile-load515'), tileUptime: $('#tile-uptime'),
     };
 
     /* ═══════════════════════════════════════
@@ -240,6 +247,92 @@
                 </div>`;
         }
         dom.sensorContent.innerHTML = html;
+    }
+
+    /* ═══════════════════════════════════════
+       RASPBERRY Pi SİSTEM METRİKLERİ
+       ═══════════════════════════════════════ */
+    /** Yüzdesel metrik için eşik rengi (CPU / RAM). */
+    function gaugeColor(pct) {
+        const p = Number(pct) || 0;
+        if (p >= 90) return 'var(--danger)';
+        if (p >= 70) return 'var(--warning)';
+        return 'var(--accent)';
+    }
+    /** Sıcaklık eşik rengi (Pi 4: ~80-85°C kısma sınırı). */
+    function tempColor(t) {
+        const v = Number(t) || 0;
+        if (v >= 75) return 'var(--danger)';
+        if (v >= 60) return 'var(--warning)';
+        return 'var(--success)';
+    }
+    /** Conic-gradient halka göstergeyi doldur (0-100). */
+    function setGauge(el, pct, color) {
+        if (!el) return;
+        const v = Math.max(0, Math.min(100, Number(pct) || 0));
+        el.style.setProperty('--val', v.toFixed(1));
+        el.style.setProperty('--gauge-col', color);
+    }
+    /** Saniyeyi insan-okur süreye çevir (2g 3sa / 4sa 10dk / 12dk). */
+    function fmtUptime(s) {
+        s = Number(s) || 0;
+        const d = Math.floor(s / 86400);
+        const h = Math.floor((s % 86400) / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        if (d > 0) return `${d}g ${h}sa`;
+        if (h > 0) return `${h}sa ${m}dk`;
+        return `${m}dk`;
+    }
+    const hasVal = (v) => v !== null && v !== undefined && !Number.isNaN(v);
+
+    function metricsOffline() {
+        if (dom.metricsHost) {
+            dom.metricsHost.textContent = 'Sensör bağlı değil';
+            dom.metricsHost.classList.add('offline');
+        }
+        setGauge(dom.gaugeCpu, 0, 'var(--text-tertiary)');
+        setGauge(dom.gaugeMem, 0, 'var(--text-tertiary)');
+        setGauge(dom.gaugeTemp, 0, 'var(--text-tertiary)');
+        [dom.mCpu, dom.mMem, dom.mTemp, dom.tileRam, dom.tileDisk, dom.tileLoad1,
+         dom.tileCores, dom.tileLoad515, dom.tileUptime].forEach(el => { if (el) el.textContent = '—'; });
+    }
+
+    function updateMetrics(m) {
+        if (!m || typeof m !== 'object' || Object.keys(m).length === 0) {
+            metricsOffline();
+            return;
+        }
+        if (dom.metricsHost) {
+            dom.metricsHost.textContent = m.hostname || 'Raspberry Pi';
+            dom.metricsHost.classList.remove('offline');
+        }
+
+        // CPU
+        setGauge(dom.gaugeCpu, m.cpu_percent, gaugeColor(m.cpu_percent));
+        if (dom.mCpu) dom.mCpu.textContent = hasVal(m.cpu_percent) ? Math.round(m.cpu_percent) : '—';
+
+        // RAM
+        setGauge(dom.gaugeMem, m.mem_percent, gaugeColor(m.mem_percent));
+        if (dom.mMem) dom.mMem.textContent = hasVal(m.mem_percent) ? Math.round(m.mem_percent) : '—';
+
+        // Sıcaklık (dolum 85°C'ye göre ölçeklenir, değer °C gösterilir)
+        setGauge(dom.gaugeTemp, hasVal(m.temp_c) ? (m.temp_c / 85 * 100) : 0, tempColor(m.temp_c));
+        if (dom.mTemp) dom.mTemp.textContent = hasVal(m.temp_c) ? Number(m.temp_c).toFixed(1) : '—';
+
+        // Tile'lar
+        if (dom.tileRam) dom.tileRam.textContent =
+            (hasVal(m.mem_used_mb) && hasVal(m.mem_total_mb))
+                ? `${(m.mem_used_mb / 1024).toFixed(1)} / ${(m.mem_total_mb / 1024).toFixed(1)} GB` : '—';
+        if (dom.tileDisk) dom.tileDisk.textContent =
+            (hasVal(m.disk_used_gb) && hasVal(m.disk_total_gb))
+                ? `${m.disk_used_gb} / ${m.disk_total_gb} GB${hasVal(m.disk_percent) ? ` (%${Math.round(m.disk_percent)})` : ''}` : '—';
+        if (dom.tileLoad1) dom.tileLoad1.textContent = hasVal(m.load1) ? m.load1 : '—';
+        if (dom.tileCores) dom.tileCores.textContent =
+            hasVal(m.cpu_count)
+                ? (hasVal(m.cpu_freq_mhz) ? `${m.cpu_count} × ${m.cpu_freq_mhz} MHz` : `${m.cpu_count}`) : '—';
+        if (dom.tileLoad515) dom.tileLoad515.textContent =
+            (hasVal(m.load5) && hasVal(m.load15)) ? `${m.load5} / ${m.load15}` : '—';
+        if (dom.tileUptime) dom.tileUptime.textContent = hasVal(m.uptime_s) ? fmtUptime(m.uptime_s) : '—';
     }
 
     /* ═══════════════════════════════════════
@@ -571,6 +664,10 @@
                 if ('demo_mode' in msg) updateModeBadge(msg.demo_mode);
                 break;
 
+            case 'metrics':
+                updateMetrics(msg.data);
+                break;
+
             case 'alert':
                 handleAlert(msg);
                 break;
@@ -592,6 +689,7 @@
         if (msg.stats && msg.stats.sensors_online != null) {
             updateSensorStatus(msg.stats.sensors_online);
         }
+        updateMetrics(msg.metrics);
         if ('demo_mode' in msg) updateModeBadge(msg.demo_mode);
     }
 
@@ -688,6 +786,7 @@
             if (data.stats && data.stats.sensors_online != null) {
                 updateSensorStatus(data.stats.sensors_online);
             }
+            updateMetrics(data.metrics);
             if ('demo_mode' in data) updateModeBadge(data.demo_mode);
             console.log('[Dashboard] HTTP özet yüklendi');
         } catch (e) {
