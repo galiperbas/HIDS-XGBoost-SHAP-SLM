@@ -348,8 +348,9 @@
 
         const d = event || {};
         const tClass = threatClass(d.threat_score);
-        const methodClass = (d.method || '').toLowerCase() === 'xgboost' ? 'method-xgboost' : 'method-rule';
-        const methodLabel = (d.method || '').toLowerCase() === 'xgboost' ? 'XGBoost' : 'Kural';
+        const _m = (d.method || '').toLowerCase();
+        const methodClass = _m === 'xgboost' ? 'method-xgboost' : _m === 'hybrid' ? 'method-hybrid' : 'method-rule';
+        const methodLabel = _m === 'xgboost' ? 'XGBoost' : _m === 'hybrid' ? 'Hibrit' : 'Kural';
         const mitre = d.mitre || MITRE_MAP[d.attack_type] || '';
 
         // Açıklanabilirlik: XGBoost SHAP öznitelikleri (canlı) ya da kural/demo gerekçesi
@@ -441,7 +442,9 @@
         const tClass = threatClass(d.threat_score);
         const mitre = d.mitre || MITRE_MAP[d.attack_type] || '';
         const mitreName = MITRE_NAME[mitre] || '';
-        const methodLabel = (d.method || '').toLowerCase() === 'xgboost' ? 'XGBoost (akış-bazlı ML)' : 'Kural tabanlı';
+        const _m = (d.method || '').toLowerCase();
+        const methodLabel = _m === 'xgboost' ? 'XGBoost (akış-bazlı ML)'
+            : _m === 'hybrid' ? 'Hibrit (kural + ML)' : 'Kural tabanlı';
 
         let whyHtml = buildShapHtml(d.shap_top);
         if (!whyHtml && d.reason) {

@@ -1019,6 +1019,13 @@ body::before {
     border: 1px solid rgba(0, 229, 255, 0.3);
 }
 
+/* Hibrit (kural + ML birlikte ateşledi) — mor↔camgöbeği geçişiyle iki katmanı temsil eder */
+.method-badge.method-hybrid {
+    background: linear-gradient(90deg, rgba(139, 92, 246, 0.18), rgba(0, 229, 255, 0.18));
+    color: #c4b5fd;
+    border: 1px solid rgba(139, 92, 246, 0.35);
+}
+
 /* MITRE ATT&CK teknik rozeti */
 .mitre-badge {
     font-size: 0.6rem;
