@@ -13,6 +13,10 @@ set -euo pipefail
 source "$(dirname "$0")/config.sh"
 require_tool nmap
 
+# Hedef IP'yi argümanla geç (config'teki TARGET'ı ezer); DHCP değişiminde pratik:
+#   sudo bash 01_port_scan.sh 192.168.137.26
+TARGET="${1:-$TARGET}"
+
 banner "Port Scan (nmap)" "PortScan"
 ping_check
 
@@ -25,8 +29,9 @@ else
 fi
 
 countdown 3
-# -T4: agresif zamanlama, --min-rate: saniyede en az 500 paket → eşiği garantiler
-nmap $SCAN -T4 --min-rate 500 -p 1-1000 "$TARGET"
+# -Pn: host keşfini atla (kurban ping'e kapalı olsa da tara), -T4: agresif zamanlama,
+# --min-rate: saniyede en az 500 paket → PortScan eşiğini (>=15 port/sn) garantiler
+nmap $SCAN -Pn -T4 --min-rate 500 -p 1-1000 "$TARGET"
 
 echo
 echo "${C_GRN}[bitti]${C_RST} Port taraması tamamlandı. HIDS panosunda 'PortScan' görmelisiniz."

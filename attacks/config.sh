@@ -9,8 +9,8 @@
 # =============================================================================
 
 # --- Ağ ---------------------------------------------------------------------
-TARGET="${TARGET:-192.168.137.238}"      # SimVM-Normal  (kurban / hedef)
-ATTACKER_IP="${ATTACKER_IP:-192.168.137.61}"  # SimVM-Attacker (bu makine)
+TARGET="${TARGET:-192.168.137.26}"       # SimVM-Normal  (kurban / hedef) — DHCP DEĞİŞEBİLİR
+ATTACKER_IP="${ATTACKER_IP:-192.168.137.177}"  # SimVM-Attacker (bu makine) — DHCP DEĞİŞEBİLİR
 IFACE="${IFACE:-ens33}"                   # saldırgan VM çıkış arayüzü
 
 # --- Wordlist'ler (brute force) --------------------------------------------
