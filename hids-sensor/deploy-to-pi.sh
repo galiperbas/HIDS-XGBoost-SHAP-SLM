@@ -28,6 +28,7 @@ scp "${SCRIPT_DIR}/sensor/sniffer.py" \
     "${SCRIPT_DIR}/sensor/flow_aggregator.py" \
     "${SCRIPT_DIR}/sensor/detector.py" \
     "${SCRIPT_DIR}/sensor/sysmetrics.py" \
+    "${SCRIPT_DIR}/sensor/incident_aggregator.py" \
     "${SCRIPT_DIR}/sensor/app.py" \
     "${PI_USER}@${PI_IP}:/tmp/hids_sensor/"
 

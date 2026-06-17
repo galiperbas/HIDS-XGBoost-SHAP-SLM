@@ -42,6 +42,12 @@ try:
 except ImportError:
     from sysmetrics import SysMetrics
 
+# Olay birleştirme (alert aggregation / alarm yorgunluğu azaltımı)
+try:
+    from .incident_aggregator import IncidentAggregator
+except ImportError:
+    from incident_aggregator import IncidentAggregator
+
 # ── App ──
 app = FastAPI(title="HIDS Sensor API — Hybrid Detection")
 app.add_middleware(CORSMiddleware, allow_origins=["*"],
@@ -63,6 +69,10 @@ detector = AnomalyDetector(models_dir="models")
 # Pi sistem metrikleri toplayıcı (CPU/RAM/sıcaklık) + en son okunan değer
 sysmetrics = SysMetrics()
 latest_metrics: dict = {}
+
+# Ham tespitleri tek olaya toplayan katman. Ham loglar yine de diske yazılır
+# (değerlendirme bozulmaz); buluta/panoya YALNIZCA birleştirilmiş olaylar gider.
+incident_aggregator = IncidentAggregator(window_sec=10.0, max_incident_sec=30.0)
 
 # Bulut relay'e push (Pi bağlıysa)
 RELAY_URL = os.environ.get("RELAY_URL", "")
@@ -160,6 +170,7 @@ async def consumer_loop():
     last_win = time.time()
     last_flow_check = time.time()
     last_metrics = time.time()
+    last_inc_flush = time.time()
 
     while True:
         processed = 0
@@ -179,7 +190,8 @@ async def consumer_loop():
             else:
                 _win["outbound"] += f.packet_size
 
-            # Kural tabanlı tespit varsa yayınla
+            # Kural tabanlı tespit: ham log diske yazılır (değerlendirme için),
+            # buluta/panoya gönderim için OLAYA toplanır (alert aggregation).
             if rule_det and rule_det.label == "ANOMALY":
                 kpi["anomaly"] += 1
                 kpi["rule_detections"] += 1
@@ -187,11 +199,8 @@ async def consumer_loop():
                     kpi["critical"] += 1
                 log = make_log(rule_det, f.source_ip, f.destination_ip,
                                f.protocol, f.timestamp)
-                recent_logs.appendleft(log)
                 log_to_disk(log)
-                await broadcast({"type": "log", "data": log})
-                if pusher and pusher.connected:
-                    pusher.push(log)
+                incident_aggregator.add(log)
             else:
                 kpi["normal"] += 1
 
@@ -201,17 +210,14 @@ async def consumer_loop():
             last_flow_check = now
             flow_dets = detector.get_flow_detections()
             for det in flow_dets:
+                log = make_log(det)
+                log_to_disk(log)                  # ham log (normal+anomali) korunur
                 if det.label == "ANOMALY":
                     kpi["anomaly"] += 1
                     kpi["xgboost_detections"] += 1
                     if det.threat_score >= 70:
                         kpi["critical"] += 1
-                log = make_log(det)
-                recent_logs.appendleft(log)
-                log_to_disk(log)
-                await broadcast({"type": "log", "data": log})
-                if pusher and pusher.connected:
-                    pusher.push(log)
+                    incident_aggregator.add(log)  # yalnızca anomaliyi olaya kat
 
         # Trafik penceresi yayını
         if now - last_win >= 3:
@@ -248,6 +254,16 @@ async def consumer_loop():
                     pusher.push({"type": "metrics", "data": m})
             except Exception:
                 pass
+
+        # Olay birleştirme (alert aggregation): biten olayları TEK özet olarak
+        # yayınla/push et. Ham tespitler zaten diske yazıldı (değerlendirme korunur).
+        if now - last_inc_flush >= 1:
+            last_inc_flush = now
+            for inc in incident_aggregator.flush():
+                recent_logs.appendleft(inc)
+                await broadcast({"type": "log", "data": inc})
+                if pusher and pusher.connected:
+                    pusher.push(inc)
 
         if processed == 0:
             await asyncio.sleep(0.05)
