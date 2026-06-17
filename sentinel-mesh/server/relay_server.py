@@ -118,14 +118,15 @@ async def notify_critical(event: dict):
 # API anahtarı yalnızca sunucu tarafında env değişkeninde tutulur — tarayıcıya
 # ve koda ASLA gömülmez. Render → Environment → GEMINI_API_KEY olarak ayarlanır.
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-# Varsayılan: gemini-2.0-flash — DÜŞÜNMEYEN, hızlı, ücretsiz-tier dostu model.
-# Neden bu? 2.5/3.x "düşünen" modeller gizli düşünme token'larını maxOutputTokens'tan
-# harcar ve düşük limitte yanıtı YARIDA KESER. 2.0-flash bu sorunu yaşamaz.
+# Varsayılan: gemini-2.5-flash — ücretsiz tier'da mevcut (Flash/Flash-Lite).
+# ÖNEMLİ: gemini-2.0-flash Mart 2026'da emekliye ayrıldı (artık 404) — KULLANILMAZ.
+# 2.5-flash bir "düşünen" modeldir; düşünme token'ları maxOutputTokens'tan harcanır
+# ve düşük limitte yanıtı YARIDA KESER. Çözüm aşağıda: düşünme kapatılır
+# (thinkingBudget=0) + maxOutputTokens bol tutulur → 2.5-flash ile tam/temiz yanıt.
 # NOT: Render'da GEMINI_MODEL env değişkeni TANIMLIYSA burayı ezer — kontrol et.
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
-# Birincil model 404 verirse sırayla denenecek yedekler (düşünenlerde düşünme
-# aşağıda kapatılır → onlar da yarıda kesmez).
-GEMINI_FALLBACKS = ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-flash-latest"]
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+# Birincil model erişilemezse denenecek yedekler (hepsi düşünme kapalı çalışır).
+GEMINI_FALLBACKS = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-2.5-flash-lite"]
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 CHAT_SYSTEM = """Sen bir ev ağı güvenlik asistanısın. Evdeki internet ağını \
@@ -376,11 +377,13 @@ async def chat(payload: dict):
 
     def _build_body(model: str) -> dict:
         # maxOutputTokens'ı bol tut → yanıt yarıda kesilmesin (yalnızca üst sınır;
-        # üretilmeyen token ücretlendirilmez).
+        # üretilmeyen token ücretlendirilmez). Düşünme kapalı olsa da bol bütçe
+        # 'thinkingBudget yok sayılırsa' diye ek güvenlik sağlar.
         gen_cfg = {"temperature": 0.4, "maxOutputTokens": 2048}
-        # 2.5/3.x "düşünen" modellerde düşünmeyi kapat → tüm bütçe görünür yanıta
-        # gider (2.0-flash bu alanı kullanmaz, ona gönderilmez).
-        if "2.5" in model or "3." in model or "thinking" in model:
+        # Düşünen modellerde (2.5/3.x — ücretsiz tier'daki tüm modeller) düşünmeyi
+        # kapat → tüm bütçe görünür yanıta gider. (1.5/2.0 thinkingConfig'i
+        # desteklemez; onlara GÖNDERME, 400 hatası verir.)
+        if ("1.5" not in model) and ("2.0" not in model):
             gen_cfg["thinkingConfig"] = {"thinkingBudget": 0}
         return {
             "system_instruction": {"parts": [{"text": system}]},
