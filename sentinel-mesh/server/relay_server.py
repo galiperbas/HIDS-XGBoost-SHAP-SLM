@@ -118,11 +118,14 @@ async def notify_critical(event: dict):
 # API anahtarı yalnızca sunucu tarafında env değişkeninde tutulur — tarayıcıya
 # ve koda ASLA gömülmez. Render → Environment → GEMINI_API_KEY olarak ayarlanır.
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-# NOT: gemini-2.0-flash Google tarafından KAPATILDI (404 verir). Güncel GA flash:
-# gemini-2.5-flash (hızlı/ucuz) ve gemini-3.5-flash.
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
-# Birincil model 404 verirse (model kapatılmışsa) sırayla denenecek güncel yedekler
-GEMINI_FALLBACKS = ["gemini-2.5-flash", "gemini-3.5-flash", "gemini-flash-latest"]
+# Varsayılan: gemini-2.0-flash — DÜŞÜNMEYEN, hızlı, ücretsiz-tier dostu model.
+# Neden bu? 2.5/3.x "düşünen" modeller gizli düşünme token'larını maxOutputTokens'tan
+# harcar ve düşük limitte yanıtı YARIDA KESER. 2.0-flash bu sorunu yaşamaz.
+# NOT: Render'da GEMINI_MODEL env değişkeni TANIMLIYSA burayı ezer — kontrol et.
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+# Birincil model 404 verirse sırayla denenecek yedekler (düşünenlerde düşünme
+# aşağıda kapatılır → onlar da yarıda kesmez).
+GEMINI_FALLBACKS = ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-flash-latest"]
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 CHAT_SYSTEM = """Sen bir ev ağı güvenlik asistanısın. Evdeki internet ağını \
@@ -365,23 +368,32 @@ async def chat(payload: dict):
             contents.append({"role": role, "parts": [{"text": txt}]})
     contents.append({"role": "user", "parts": [{"text": message}]})
 
-    body = {
-        "system_instruction": {"parts": [{"text": system}]},
-        "contents": contents,
-        "generationConfig": {"temperature": 0.4, "maxOutputTokens": 800},
-    }
-
-    # Denenecek modeller: önce yapılandırılan, sonra güncel yedekler (404'a karşı)
+    # Denenecek modeller: önce yapılandırılan, sonra yedekler (404'a karşı)
     models_to_try = []
     for m in [GEMINI_MODEL] + GEMINI_FALLBACKS:
         if m and m not in models_to_try:
             models_to_try.append(m)
 
+    def _build_body(model: str) -> dict:
+        # maxOutputTokens'ı bol tut → yanıt yarıda kesilmesin (yalnızca üst sınır;
+        # üretilmeyen token ücretlendirilmez).
+        gen_cfg = {"temperature": 0.4, "maxOutputTokens": 2048}
+        # 2.5/3.x "düşünen" modellerde düşünmeyi kapat → tüm bütçe görünür yanıta
+        # gider (2.0-flash bu alanı kullanmaz, ona gönderilmez).
+        if "2.5" in model or "3." in model or "thinking" in model:
+            gen_cfg["thinkingConfig"] = {"thinkingBudget": 0}
+        return {
+            "system_instruction": {"parts": [{"text": system}]},
+            "contents": contents,
+            "generationConfig": gen_cfg,
+        }
+
     try:
-        async with httpx.AsyncClient(timeout=25) as client:
+        async with httpx.AsyncClient(timeout=30) as client:
             for model in models_to_try:
                 url = GEMINI_URL.format(model=model)
-                r = await client.post(url, params={"key": GEMINI_API_KEY}, json=body)
+                r = await client.post(url, params={"key": GEMINI_API_KEY},
+                                      json=_build_body(model))
 
                 # Model kapatılmış/bulunamadı → bir sonraki yedeği dene
                 if r.status_code == 404:
@@ -397,9 +409,18 @@ async def chat(payload: dict):
                 if not candidates:
                     # İçerik güvenlik filtresine takılmış olabilir
                     return {"reply": "Bu soruya şu an yanıt veremedim. Farklı bir şekilde sorabilir misiniz?"}
-                parts = candidates[0].get("content", {}).get("parts", [])
+
+                cand = candidates[0]
+                parts = cand.get("content", {}).get("parts", [])
                 reply = "".join(p.get("text", "") for p in parts).strip()
-                print(f"[CHAT] yanıt verildi (model={model})")
+                finish = cand.get("finishReason", "")
+
+                # Düşünme token'ları yüzünden boş/yarım dönerse bir sonraki yedeğe geç
+                if not reply and finish == "MAX_TOKENS":
+                    print(f"[CHAT] {model} MAX_TOKENS ile boş döndü → yedeğe geçiliyor")
+                    continue
+
+                print(f"[CHAT] yanıt verildi (model={model}, finish={finish})")
                 return {"reply": reply or "Şu an net bir yanıt oluşturamadım."}
 
         # Tüm modeller 404 verdi
